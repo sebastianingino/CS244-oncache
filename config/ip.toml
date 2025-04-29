@@ -1,0 +1,7 @@
+[node.primary]
+ip = "10.138.0.8"
+mode = "client"
+
+[node.secondary]
+ip = "10.138.0.9"
+mode = "server"
