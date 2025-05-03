@@ -1,0 +1,5 @@
+[tcp]
+min_flows   = 1
+max_flows   = 32
+duration    = 30    # seconds
+port_start  = 5200
