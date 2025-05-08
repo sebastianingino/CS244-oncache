@@ -24,6 +24,7 @@ TCPBenchmarkConfig = TypedDict(
         "max_flows": int,
         "port_start": int,
         "duration": int,
+        "iterations": int,
     },
 )
 
