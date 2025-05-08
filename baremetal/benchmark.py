@@ -26,6 +26,7 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
         ]
         subprocess.run(cmd, check=True)
     print("iperf3 throughput benchmark completed for all flows.")
+    input("Press Enter to continue to the next benchmark...")
 
     # Netperf Latency Benchmark
     for n_flows in exp_range(
@@ -39,7 +40,7 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
             str(benchmark_config["port_start"]),
             "-t",  # Test type
             "TCP_RR",  # TCP request/response test
-            "-C"  # Report remote CPU utilization
+            "-C",  # Report remote CPU utilization
             "-i",  # number of iterations
             str(benchmark_config["iterations"]),
         ]
@@ -54,12 +55,11 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
                 print(
                     f"Error in netperf for {n_flows} flows: {p.stderr.read().decode()}"
                 )
-            else:
-                print(f"Netperf completed successfully for {n_flows} flows.")
+        print(f"Netperf completed successfully for {n_flows} flows.")
         for i, p in enumerate(processes):
             # Export the output to a file
             with open(
-                f"logs/baremetal/client_log_latency_{n_flows}_flows.json", "a"
+                f"logs/baremetal/client_log_latency_{n_flows}_flows.txt", "a"
             ) as f:
                 f.write(f"Output for flow {i + 1}:\n")
                 f.write(p.stdout.read().decode())
@@ -114,6 +114,7 @@ def run_benchmark():
     # Clear logs
     subprocess.run(["mkdir", "-p", "logs/baremetal"], check=True)
     subprocess.run(["find", "logs/baremetal", "-name", "*.json", "-delete"], check=True)
+    subprocess.run(["find", "logs/baremetal", "-name", "*.txt", "-delete"], check=True)
 
     if role == "primary":
         destination = spec_config["node"]["secondary"]["ip"]
