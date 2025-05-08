@@ -7,6 +7,7 @@ from shared.util import exp_range
 
 def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
     # IPerf Throughput Benchmark
+    print("Running iperf3 benchmark (Client)")
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
@@ -28,7 +29,8 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
     print("iperf3 throughput benchmark completed for all flows.")
     input("Press Enter to continue to the next benchmark...")
 
-    # Netperf Latency Benchmark
+    # Netperf RR Benchmark
+    print("Running netperf benchmark (client)")
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
@@ -59,11 +61,11 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
         for i, p in enumerate(processes):
             # Export the output to a file
             with open(
-                f"logs/baremetal/client_log_latency_{n_flows}_flows.txt", "a"
+                f"logs/baremetal/client_log_rr_{n_flows}_flows.txt", "a"
             ) as f:
                 f.write(f"Output for flow {i + 1}:\n")
                 f.write(p.stdout.read().decode())
-    print("netperf latency benchmark completed for all flows.")
+    print("netperf rr benchmark completed for all flows.")
 
 
 def run_server(benchmark_config: TCPBenchmarkConfig):
@@ -88,7 +90,7 @@ def run_server(benchmark_config: TCPBenchmarkConfig):
         p.wait()
     print("iperf3 server terminated successfully.")
 
-    # netperf latency benchmark
+    # netperf rr benchmark
     cmd = [
         "netserver",
         "-p",
