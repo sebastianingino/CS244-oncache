@@ -1,3 +1,4 @@
+import argparse
 import os
 from typing import Any, Callable, Dict, List, NotRequired, TypedDict
 import pandas as pd
@@ -94,7 +95,7 @@ def load_data() -> Dict[str, pd.DataFrame]:
 
     mapped_data = {}
     for name, config in DATA_CONFIG.items():
-        df = data[name]
+        df = data[name].copy()
         for graph in GRAPHS:
             if "map" in graph:
                 # Apply the mapping function to the specified column
@@ -118,7 +119,7 @@ def load_data() -> Dict[str, pd.DataFrame]:
     return joined_data
 
 
-def plot_data(data: Dict[str, pd.DataFrame]) -> None:
+def plot_data(data: Dict[str, pd.DataFrame], output: str, show: bool) -> None:
     """
     Plot the data from the given configuration.
 
@@ -144,14 +145,40 @@ def plot_data(data: Dict[str, pd.DataFrame]) -> None:
         ax.set_title(graph["title"])
         ax.set_xlabel(graph["xlabel"])
         ax.set_ylabel(graph["ylabel"])
-        ax.legend()
+
+    handles, labels = plts[-1].get_legend_handles_labels()
+    fig.legend(handles, labels, loc='upper center', ncol=len(DATA_CONFIG))
+
     plt.tight_layout()
-    plt.show()
+    plt.subplots_adjust(top=0.85)
+    if not os.path.exists(os.path.dirname(output)):
+        os.makedirs(os.path.dirname(output))
+    plt.savefig(output, dpi=300, bbox_inches="tight")
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Plot data from CSV files.")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="results/plot.png",
+        help="Output file for the plot.",
+    )
+
+    parser.add_argument(
+        "--show",
+        action="store_true",
+        help="Show the plot.",
+    )
+
+    args = parser.parse_args()
+
     data = load_data()
-    plot_data(data)
+    plot_data(data, args.output, args.show)
 
 
 if __name__ == "__main__":
