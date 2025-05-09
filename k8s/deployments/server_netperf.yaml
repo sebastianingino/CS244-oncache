@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: server-netperf
-          image: networkstatic/netperf
+          image: networkstatic/netserver
           imagePullPolicy: IfNotPresent
           args: ["-D"]
           ports:

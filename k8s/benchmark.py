@@ -45,7 +45,7 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
         [
             "kubectl",
             "wait",
-            "--for=condition=Ready",
+            "--for=condition=Running",
             "--timeout=60s",
             "-f",
             server_deployment,
@@ -56,7 +56,7 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
         [
             "kubectl",
             "wait",
-            "--for=condition=Ready",
+            "--for=condition=Running",
             "--timeout=60s",
             "-f",
             client_deployment,
@@ -105,6 +105,8 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
 def k8s_teardown(server_deployment: str, client_deployment: str):
     subprocess.run(["kubectl", "delete", "-f", server_deployment])
     subprocess.run(["kubectl", "delete", "-f", client_deployment])
+    subprocess.run(["kubectl", "wait", "--for=delete", "-f", server_deployment])
+    subprocess.run(["kubectl", "wait", "--for=delete", "-f", client_deployment])
 
 
 def run_iperf3_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
