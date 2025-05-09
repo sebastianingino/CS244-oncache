@@ -216,10 +216,10 @@ def run_benchmark(overlay: str):
 
     # Run iperf3 benchmark
     pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
-    # run_iperf3_benchmark(benchmark_config, pods, overlay)
+    run_iperf3_benchmark(benchmark_config, pods, overlay)
     k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
 
     # Run netperf benchmark
-    # pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
-    # run_netperf_benchmark(benchmark_config, pods, overlay)
-    # k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
+    pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
+    run_netperf_benchmark(benchmark_config, pods, overlay)
+    k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
