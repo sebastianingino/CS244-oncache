@@ -40,26 +40,17 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
     subprocess.run(["kubectl", "apply", "-f", server_deployment])
     subprocess.run(["kubectl", "apply", "-f", client_deployment])
 
-    # Wait for the server to be ready
+    # Wait for all pods to be ready
     subprocess.run(
         [
             "kubectl",
             "wait",
-            "--for=condition=Running",
+            "--for=condition=Ready",
+            "pods",
+            "--all",
             "--timeout=60s",
-            "-f",
-            server_deployment,
-        ]
-    )
-    # Wait for the client to be ready
-    subprocess.run(
-        [
-            "kubectl",
-            "wait",
-            "--for=condition=Running",
-            "--timeout=60s",
-            "-f",
-            client_deployment,
+            "-n",
+            "default",
         ]
     )
 
