@@ -40,7 +40,7 @@ def main():
         if args.benchmark == "baremetal":
             baremetal_parse(BAREMETAL_OUTPUT_FILE)
         elif args.benchmark == "k8s":
-            k8s_parse(K8S_OUTPUT_FILE.format(args.overlay))
+            k8s_parse(K8S_OUTPUT_FILE.format(args.overlay), args.overlay)
         return
 
     if args.benchmark == "baremetal":
@@ -49,8 +49,8 @@ def main():
         baremetal_parse(BAREMETAL_OUTPUT_FILE)
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
-        k8s_benchmark()
-        k8s_parse(K8S_OUTPUT_FILE.format(args.overlay))
+        k8s_benchmark(args.overlay)
+        k8s_parse(K8S_OUTPUT_FILE.format(args.overlay), args.overlay)
 
 
 if __name__ == "__main__":

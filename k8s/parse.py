@@ -13,17 +13,18 @@ CSV_FIELDS = [
     "TCP RR",
     "TCP RR CPU",
 ]
-THROUGHPUT_PATTERN = "logs/k8s/client_log_throughput_{}_flows_{}.json"
-RR_PATTERN = "logs/k8s/client_log_netperf_{}_flows_{}.txt"
+THROUGHPUT_PATTERN = (
+    "logs/k8s/{overlay}/client_log_throughput_{n_flows}_flows_{flow_idx}.json"
+)
+RR_PATTERN = "logs/k8s/{overlay}/client_log_rr_{n_flows}_flows_{flow_idx}.txt"
+
 
 def parse_throughput_single(filename: str) -> Dict[str, float]:
     with open(filename, "r") as f:
         data = json.load(f)
 
         bits_per_second = float(data["end"]["sum_sent"]["bits_per_second"])
-        cpu_utilization = float(
-            data["end"]["cpu_utilization_percent"]["remote_total"]
-        )
+        cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
         num_flows = int(data["start"]["test_start"]["num_streams"])
 
         return {
@@ -31,13 +32,14 @@ def parse_throughput_single(filename: str) -> Dict[str, float]:
             "TCP Throughput CPU": cpu_utilization / num_flows,
         }
 
+
 def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
     with open(filename, "r") as f:
         lines = f.readlines()
-    
+
         rates = []
         cpu_usages = []
-        
+
         data = lines[-1].split()
         rates.append(float(data[4]))
         cpu_usages.append(float(data[6]))
@@ -46,10 +48,14 @@ def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {
             "TCP RR": average_rate,
-            "TCP RR CPU": average_cpu_usage / num_flows,  # avg cpu will read the same for all flows
+            "TCP RR CPU": average_cpu_usage
+            / num_flows,  # avg cpu will read the same for all flows
         }
 
-def parse_throughput_many(benchmark_config: TCPBenchmarkConfig, pattern: str) -> Dict[str, List[float]]:
+
+def parse_throughput_many(
+    benchmark_config: TCPBenchmarkConfig, pattern: str
+) -> Dict[str, List[float]]:
     results = {}
 
     for n_flows in exp_range(
@@ -57,7 +63,10 @@ def parse_throughput_many(benchmark_config: TCPBenchmarkConfig, pattern: str) ->
     ):
         flow_result = {}
         for i in range(n_flows):
-            filename = pattern.format(n_flows, i)
+            filename = pattern.format(
+                n_flows=n_flows,
+                flow_idx=i,
+            )
             try:
                 single_result = parse_throughput_single(filename)
                 for key in single_result:
@@ -73,7 +82,10 @@ def parse_throughput_many(benchmark_config: TCPBenchmarkConfig, pattern: str) ->
             results[key].append(flow_result[key])
     return results
 
-def parse_rr_many(benchmark_config: TCPBenchmarkConfig, pattern: str) -> Dict[str, List[float]]:
+
+def parse_rr_many(
+    benchmark_config: TCPBenchmarkConfig, pattern: str
+) -> Dict[str, List[float]]:
     results = {}
 
     for n_flows in exp_range(
@@ -81,7 +93,10 @@ def parse_rr_many(benchmark_config: TCPBenchmarkConfig, pattern: str) -> Dict[st
     ):
         flow_result = {}
         for i in range(n_flows):
-            filename = pattern.format(n_flows, i)
+            filename = pattern.format(
+                n_flows=n_flows,
+                flow_idx=i,
+            )
             try:
                 single_result = parse_rr_single(filename, n_flows)
                 for key in single_result:
@@ -97,13 +112,16 @@ def parse_rr_many(benchmark_config: TCPBenchmarkConfig, pattern: str) -> Dict[st
             results[key].append(flow_result[key])
     return results
 
-def run_parse(output_file: str):
+
+def run_parse(output_file: str, overlay: str):
     """
     Run the parsing of the benchmark results and save them to a CSV file.
     """
     benchmark_config = get_benchmark_config()["tcp"]
-    throughput_results = parse_throughput_many(benchmark_config, THROUGHPUT_PATTERN)
-    rr_results = parse_rr_many(benchmark_config, RR_PATTERN)
+    throughput_results = parse_throughput_many(
+        benchmark_config, THROUGHPUT_PATTERN.format(overlay=overlay)
+    )
+    rr_results = parse_rr_many(benchmark_config, RR_PATTERN.format(overlay=overlay))
 
     # Combine the results
     results = {}

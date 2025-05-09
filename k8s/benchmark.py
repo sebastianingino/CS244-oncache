@@ -36,6 +36,7 @@ Pods = TypedDict(
     },
 )
 
+
 def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Pods:
     subprocess.run(["kubectl", "apply", "-f", server_deployment])
     subprocess.run(["kubectl", "apply", "-f", client_deployment])
@@ -100,7 +101,9 @@ def k8s_teardown(server_deployment: str, client_deployment: str):
     subprocess.run(["kubectl", "wait", "--for=delete", "-f", client_deployment])
 
 
-def run_iperf3_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
+def run_iperf3_benchmark(
+    benchmark_config: TCPBenchmarkConfig, pods: Pods, overlay: str
+):
     print("Running iperf3 benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
     for n_flows in exp_range(
@@ -135,7 +138,7 @@ def run_iperf3_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
             else:
                 # Export the output to a file
                 with open(
-                    f"logs/k8s/client_log_throughput_{n_flows}_flows_{i}.json",
+                    f"logs/k8s/{overlay}/client_log_throughput_{n_flows}_flows_{i}.json",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -144,7 +147,9 @@ def run_iperf3_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
     print("iperf3 throughput benchmark completed for all flows.")
 
 
-def run_netperf_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
+def run_netperf_benchmark(
+    benchmark_config: TCPBenchmarkConfig, pods: Pods, overlay: str
+):
     print("Running netperf benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
     for n_flows in exp_range(
@@ -181,7 +186,7 @@ def run_netperf_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
             else:
                 # Export the output to a file
                 with open(
-                    f"logs/k8s/client_log_netperf_{n_flows}_flows_{i}.txt",
+                    f"logs/k8s/{overlay}/client_log_netperf_{n_flows}_flows_{i}.txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -189,21 +194,26 @@ def run_netperf_benchmark(benchmark_config: TCPBenchmarkConfig, pods: Pods):
 
     print("netperf benchmark completed for all flows.")
 
-def run_benchmark():
+
+def run_benchmark(overlay: str):
     benchmark_config = get_benchmark_config()["tcp"]
     load_kube_config()
 
     # Clear logs
-    subprocess.run(["mkdir", "-p", "logs/k8s"], check=True)
-    subprocess.run(["find", "logs/k8s", "-name", "*.json", "-delete"], check=True)
-    subprocess.run(["find", "logs/k8s", "-name", "*.txt", "-delete"], check=True)
+    subprocess.run(["mkdir", "-p", f"logs/k8s/{overlay}"])
+    subprocess.run(
+        ["find", f"logs/k8s/{overlay}", "-name", "*.json", "-delete"], check=True
+    )
+    subprocess.run(
+        ["find", f"logs/k8s/{overlay}", "-name", "*.txt", "-delete"], check=True
+    )
 
     # Run iperf3 benchmark
     pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
-    run_iperf3_benchmark(benchmark_config, pods)
+    run_iperf3_benchmark(benchmark_config, pods, overlay)
     k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
 
     # Run netperf benchmark
     pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
-    run_netperf_benchmark(benchmark_config, pods)
+    run_netperf_benchmark(benchmark_config, pods, overlay)
     k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
