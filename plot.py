@@ -1,7 +1,9 @@
 import os
-from typing import Callable, Dict, List, NotRequired, TypedDict
+from typing import Any, Callable, Dict, List, NotRequired, TypedDict
 import pandas as pd
 import matplotlib.pyplot as plt
+
+SCALE_KEY = "k8s-antrea"
 
 DataConfig = TypedDict(
     "DataConfig",
@@ -15,7 +17,7 @@ Graph = TypedDict(
         "xlabel": str,
         "ylabel": str,
         "column": str,
-        "map": NotRequired[Callable[[float, pd.DataFrame, pd.DataFrame], float]],
+        "map": NotRequired[Callable[[float, str, Dict[str, pd.DataFrame]], Any]],
     },
 )
 
@@ -26,13 +28,13 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "color": "blue",
     },
     "k8s-antrea": {
-        "filename": "results/k8s-antrea_output.csv",
-        "label": "K8s Antrea",
+        "filename": "results/k8s_output_antrea.csv",
+        "label": "Antrea",
         "color": "orange",
     },
     "k8s-cilium": {
-        "filename": "results/k8s-cilium_output.csv",
-        "label": "K8s Cilium",
+        "filename": "results/k8s_output_cilium.csv",
+        "label": "Cilium",
         "color": "green",
     },
 }
@@ -49,31 +51,71 @@ GRAPHS: List[Graph] = [
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
         "column": "TCP Throughput CPU",
-        "map": lambda point, df_self, df_total: point
-        / df_total["TCP Throughput"]["Antrea"]
-        * df_self["TCP Throughput"],
+        "map": lambda point, name, df: point
+        / df[name]["TCP Throughput"]
+        * df[SCALE_KEY]["TCP Throughput"]
+        / 1e2,  # Percentage
     },
     {
         "title": "TCP RR",
         "xlabel": "Flows",
         "ylabel": "kRequests/s",
         "column": "TCP RR",
-        "map": lambda point, df_self, df_total: point / 1e3,
+        "map": lambda point, name, df: point / 1e3,  # Convert to kRequests/s
     },
     {
         "title": "TCP RR CPU",
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
         "column": "TCP RR CPU",
-        "map": lambda point, df_self, df_total: point
-        / df_total["TCP RR"]["Antrea"]
-        * df_self["TCP RR"],
+        "map": lambda point, name, df: point
+        / df[name]["TCP RR"]
+        * df[SCALE_KEY]["TCP RR"]
+        / 1e2,  # Percentage
     },
 ]
 
 
 def load_data() -> Dict[str, pd.DataFrame]:
-    pass
+    """
+    Load the data from the configuration.
+
+    Returns:
+        Dict[str, pd.DataFrame]: A dictionary containing DataFrames for each data source.
+    """
+    data = {}
+    for name, config in DATA_CONFIG.items():
+        filename = config["filename"]
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"File {filename} does not exist.")
+        df = pd.read_csv(filename)
+        df.set_index("Flows", inplace=True)
+        data[name] = df
+
+    mapped_data = {}
+    for name, config in DATA_CONFIG.items():
+        df = data[name]
+        for graph in GRAPHS:
+            if "map" in graph:
+                # Apply the mapping function to the specified column
+                df[graph["column"]] = graph["map"](
+                    df[graph["column"]],
+                    name,
+                    data,
+                )
+        mapped_data[name] = df
+
+    # Concatenate all DataFrames indexed by column name
+    joined_data = {}
+    for graph in GRAPHS:
+        df = pd.concat(
+            [df[graph["column"]] for df in mapped_data.values()],
+            axis=1,
+            keys=mapped_data.keys(),
+        )
+        joined_data[graph["column"]] = df
+
+    return joined_data
 
 
 def plot_data(data: Dict[str, pd.DataFrame]) -> None:
@@ -83,7 +125,28 @@ def plot_data(data: Dict[str, pd.DataFrame]) -> None:
     Args:
         data (Dict[str, pd.DataFrame]): A dictionary containing DataFrames for each data source .
     """
-    fig, plts = plt.subplots(len(GRAPHS), figsize=(10, 8))
+    fig, plts = plt.subplots(1, len(GRAPHS), figsize=(20, 5))
+    fig.subplots_adjust(hspace=0.4)
+    for i, graph in enumerate(GRAPHS):
+        ax = plts[i]
+        for name, config in DATA_CONFIG.items():
+            df = data[graph["column"]]
+            ax.plot(
+                list(range(len(df))),
+                df[name],
+                label=config["label"],
+                color=config["color"],
+                marker="o",
+                markersize=5,
+            )
+            ax.set_xticks(range(len(df)))
+            ax.set_xticklabels(df.index)
+        ax.set_title(graph["title"])
+        ax.set_xlabel(graph["xlabel"])
+        ax.set_ylabel(graph["ylabel"])
+        ax.legend()
+    plt.tight_layout()
+    plt.show()
 
 
 def main():
