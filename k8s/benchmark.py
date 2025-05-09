@@ -1,4 +1,4 @@
-from kubernetes import client, config
+from kubernetes import client, config, watch
 import subprocess
 from typing import List, TypedDict
 
@@ -28,7 +28,7 @@ PodConfig = TypedDict(
     },
 )
 
-Pods = TypedDict(
+Pods = TypedDict(   
     "Pods",
     {
         "clients": List[PodConfig],
@@ -36,24 +36,30 @@ Pods = TypedDict(
     },
 )
 
+def wait_for_deployment_ready(deployment_name: str):
+    w = watch.Watch()
+    v1 = client.AppsV1Api()
+    for event in w.stream(
+        v1.list_namespaced_deployment,
+        namespace="default",
+        label_selector=f"app={deployment_name}",
+        timeout_seconds=60,
+    ):
+        if event["type"] == "MODIFIED": # type: ignore
+            deployment = event["object"] # type: ignore
+            if deployment.status.ready_replicas == deployment.spec.replicas: # type: ignore
+                print(f"Deployment {deployment_name} is ready.")
+                w.stop()
+                break
+
 
 def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Pods:
     subprocess.run(["kubectl", "apply", "-f", server_deployment])
     subprocess.run(["kubectl", "apply", "-f", client_deployment])
 
     # Wait for all pods to be ready
-    subprocess.run(
-        [
-            "kubectl",
-            "wait",
-            "--for=condition=Ready",
-            "pods",
-            "--all",
-            "--timeout=60s",
-            "-n",
-            "default",
-        ]
-    )
+    wait_for_deployment_ready(f"server-{name}")
+    wait_for_deployment_ready(f"client-{name}")
 
     v1 = client.CoreV1Api()
     # Get all client pods
@@ -210,10 +216,10 @@ def run_benchmark(overlay: str):
 
     # Run iperf3 benchmark
     pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
-    run_iperf3_benchmark(benchmark_config, pods, overlay)
+    # run_iperf3_benchmark(benchmark_config, pods, overlay)
     k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
 
     # Run netperf benchmark
-    pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
-    run_netperf_benchmark(benchmark_config, pods, overlay)
-    k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
+    # pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
+    # run_netperf_benchmark(benchmark_config, pods, overlay)
+    # k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
