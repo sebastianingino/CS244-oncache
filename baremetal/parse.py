@@ -9,31 +9,34 @@ BITS_TO_GBPS = 1_000_000_000
 CSV_FIELDS = [
     "FLOWS",
     "TCP Throughput",
-    "TCP Throughput / CPU",
+    "TCP Throughput CPU",
     "TCP RR",
-    "TCP RR / CPU",
+    "TCP RR CPU",
 ]
 THROUGHPUT_PATTERN = "logs/baremetal/client_log_throughput_{}_flows.json"
 RR_PATTERN = "logs/baremetal/client_log_rr_{}_flows.txt"
 
 
-def parse_throughput_single(filename) -> Dict[str, float]:
+def parse_throughput_single(filename: str) -> Dict[str, float]:
     """
     Parse the throughput data from the iperf3 JSON output file.
     """
     with open(filename, "r") as f:
         data = json.load(f)
 
+        bits_per_second = float(data["end"]["sum_sent"]["bits_per_second"])
+        cpu_utilization = float(
+            data["end"]["cpu_utilization_percent"]["remote_total"]
+        )
+        num_flows = int(data["start"]["test_start"]["num_streams"])
+
         return {
-            "TCP Throughput": float(data["end"]["sum_sent"]["bits_per_second"])
-            / BITS_TO_GBPS,
-            "TCP Throughput / CPU": float(data["end"]["sum_sent"]["bits_per_second"])
-            / BITS_TO_GBPS
-            / float(data["end"]["cpu_utilization_percent"]["remote_total"]),
+            "TCP Throughput": bits_per_second / BITS_TO_GBPS / num_flows,
+            "TCP Throughput CPU": cpu_utilization / num_flows,
         }
 
 
-def parse_rr_single(filename) -> Dict[str, float]:
+def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
     """
     Parse the RR data from the netperf output file.
     """
@@ -52,7 +55,7 @@ def parse_rr_single(filename) -> Dict[str, float]:
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {
             "TCP RR": average_rate,
-            "TCP RR / CPU": average_rate / average_cpu_usage,
+            "TCP RR CPU": average_cpu_usage / num_flows, # avg cpu will read the same for all flows
         }
 
 
@@ -88,7 +91,7 @@ def parse_rr_many(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        result = parse_rr_single(pattern.format(n_flows))
+        result = parse_rr_single(pattern.format(n_flows), n_flows)
         for field, item in result.items():
             if field not in results:
                 results[field] = []
