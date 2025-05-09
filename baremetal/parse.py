@@ -7,7 +7,7 @@ from shared.util import exp_range
 
 BITS_TO_GBPS = 1_000_000_000
 CSV_FIELDS = [
-    "FLOWS",
+    "Flows",
     "TCP Throughput",
     "TCP Throughput CPU",
     "TCP RR",
