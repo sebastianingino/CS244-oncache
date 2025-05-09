@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-netperf
+  labels:
+    app: server-netperf
+spec:
+  replicas: 32
+  selector:
+    matchLabels:
+      app: server-netperf
+  template:
+    metadata:
+      labels:
+        app: server-netperf
+    spec:
+      containers:
+        - name: server-netperf
+          image: networkstatic/netperf
+          imagePullPolicy: IfNotPresent
+          args: ["-D"]
+          ports:
+            - containerPort: 12865
+              protocol: TCP
+            - containerPort: 12865
+              protocol: UDP
+      nodeSelector:
+        bench-role: server

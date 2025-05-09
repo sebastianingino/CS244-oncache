@@ -1,6 +1,7 @@
 import argparse
 from baremetal.benchmark import run_benchmark as baremetal_benchmark
 from baremetal.parse import run_parse as baremetal_parse
+from k8s.benchmark import run_benchmark as k8s_benchmark
 
 BAREMETAL_OUTPUT_FILE = "results/baremetal_output.csv"
 
@@ -35,7 +36,8 @@ def main():
         baremetal_benchmark()
         baremetal_parse(BAREMETAL_OUTPUT_FILE)
     elif args.benchmark == "k8s":
-        raise NotImplementedError("Kubernetes benchmark is not implemented yet.")
+        print("Running Kubernetes benchmark...")
+        k8s_benchmark()
 
 
 if __name__ == "__main__":
