@@ -4,3 +4,11 @@ max_flows = 32
 port_start = 3000
 duration = 10 # in seconds, for throughput benchmark
 iterations = 8 # achieve steady state, for rr benchmark
+
+[udp]
+bandwidth = "1M" # iperf3 caps per-flow UDP bandwidth
+min_flows = 1
+max_flows = 32
+port_start = 3000
+duration = 10
+iterations = 8

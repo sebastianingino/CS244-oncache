@@ -28,7 +28,21 @@ TCPBenchmarkConfig = TypedDict(
     },
 )
 
-BenchmarkConfig = TypedDict("BenchmarkConfig", {"tcp": TCPBenchmarkConfig})
+UDPBenchmarkConfig = TypedDict(
+    "UDPBenchmarkConfig",
+    {
+        "bandwidth": str,
+        "min_flows": int,
+        "max_flows": int,
+        "port_start": int,
+        "duration": int,
+        "iterations": int,
+    }
+)
+
+BenchmarkConfig = TypedDict("BenchmarkConfig", {
+                            "tcp": TCPBenchmarkConfig,
+                            "udp": UDPBenchmarkConfig})
 
 
 def get_benchmark_config(path: str = "config/benchmark.toml") -> BenchmarkConfig:
