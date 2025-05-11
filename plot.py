@@ -189,7 +189,7 @@ def main():
     bench_type = BenchType.into(args.mode)
     for b in [bench_type] if bench_type else BenchType:
         data = load_data(b)
-        plot_data(data, b, args.output.format(b.value), args.show)
+        plot_data(data, b, args.output.format(b.value.lower()), args.show)
 
 
 if __name__ == "__main__":
