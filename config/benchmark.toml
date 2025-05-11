@@ -1,5 +1,5 @@
 min_flows = 1
-max_flows = 2
+max_flows = 32
 port_start = 3000
 duration = 10 # in seconds, for throughput benchmark
 iterations = 8 # achieve steady state, for rr benchmark

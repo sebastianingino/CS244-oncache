@@ -29,6 +29,8 @@ def run_client_iperf(
         ]
         if bench_type == BenchType.UDP:
             cmd.append("-u")  # UDP test
+            cmd.append("-b")  # Bitrate limit
+            cmd.append("0")   # No limit
         subprocess.run(cmd, check=True)
     print(f"iperf3 {bench_type.value} throughput benchmark completed for all flows.")
 

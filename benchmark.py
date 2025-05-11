@@ -6,8 +6,8 @@ from k8s.parse import run_parse as k8s_parse
 from shared.config import BenchType
 from shared.setup import get_role
 
-BAREMETAL_OUTPUT_FILE = "results/baremetal_output.csv"
-K8S_OUTPUT_FILE = "results/k8s_output_{}.csv"
+BAREMETAL_OUTPUT_FILE = "results/{bench_type}_baremetal_output.csv"
+K8S_OUTPUT_FILE = "results/k8s_output_{overlay}.csv"
 
 
 def main():
@@ -49,9 +49,12 @@ def main():
         print("Parsing results only...")
         if args.benchmark == "baremetal":
             for bench_type in BenchType:
-               baremetal_parse(BAREMETAL_OUTPUT_FILE, bench_type)
+                baremetal_parse(
+                    BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                    bench_type,
+                )
         elif args.benchmark == "k8s":
-            k8s_parse(K8S_OUTPUT_FILE.format(args.overlay), args.overlay)
+            k8s_parse(K8S_OUTPUT_FILE.format(overlay=args.overlay), args.overlay)
         return
 
     if args.benchmark == "baremetal":
@@ -60,11 +63,14 @@ def main():
         baremetal_benchmark(BenchType.into(args.mode))
         if role == "primary":
             for bench_type in BenchType:
-                baremetal_parse(BAREMETAL_OUTPUT_FILE, bench_type)
+                baremetal_parse(
+                    BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                    bench_type,
+                )
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
         k8s_benchmark(args.overlay)
-        k8s_parse(K8S_OUTPUT_FILE.format(args.overlay), args.overlay)
+        k8s_parse(K8S_OUTPUT_FILE.format(overlay=args.overlay), args.overlay)
 
 
 if __name__ == "__main__":

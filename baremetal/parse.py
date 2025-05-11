@@ -25,8 +25,13 @@ def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, f
     """
     with open(filename, "r") as f:
         data = json.load(f)
-
-        bits_per_second = float(data["end"]["sum_sent"]["bits_per_second"])
+        if bench_type == BenchType.TCP:
+            bits_per_second = float(data["end"]["sum_received"]["bits_per_second"])
+        else:
+            received_rate = 1 - float(data["end"]["sum"]["loss_percent"]) / 100
+            bits_per_second = (
+                float(data["end"]["sum"]["bits_per_second"]) * received_rate
+            )
         cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
         num_flows = int(data["start"]["test_start"]["num_streams"])
 
@@ -102,7 +107,7 @@ def parse_rr_many(
         result = parse_rr_single(
             pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows),
             n_flows,
-            BenchType.UDP,
+            bench_type,
         )
         for field, item in result.items():
             if field not in results:
@@ -116,7 +121,9 @@ def run_parse(output_file: str, bench_type: BenchType) -> None:
     Run the parsing of the throughput and RR data and save it to a CSV file.
     """
     benchmark_config = get_benchmark_config()
-    throughput_results = parse_throughput_many(benchmark_config, bench_type, THROUGHPUT_PATTERN)
+    throughput_results = parse_throughput_many(
+        benchmark_config, bench_type, THROUGHPUT_PATTERN
+    )
     rr_results = parse_rr_many(benchmark_config, bench_type, RR_PATTERN)
 
     # Combine the results
@@ -128,7 +135,10 @@ def run_parse(output_file: str, bench_type: BenchType) -> None:
             2,
         )
     )
-    for field in CSV_FIELDS:
+
+    fields = [field.format(bench_type=bench_type.value) for field in CSV_FIELDS]
+
+    for field in fields:
         if field not in results:
             results[field] = []
         if field in throughput_results:
@@ -138,12 +148,12 @@ def run_parse(output_file: str, bench_type: BenchType) -> None:
 
     # Write the results to a CSV file
     with open(output_file, "w") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(
             [
-                {field: results[field][i] for field in CSV_FIELDS}
-                for i in range(len(results[CSV_FIELDS[0]]))
+                {field: results[field][i] for field in fields}
+                for i in range(len(results[fields[0]]))
             ]
         )
     print(f"Results saved to {output_file}")
