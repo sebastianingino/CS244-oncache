@@ -28,7 +28,7 @@ def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, f
         if bench_type == BenchType.TCP:
             bits_per_second = float(data["end"]["sum_received"]["bits_per_second"])
         else:
-            received_rate = 1 - float(data["end"]["sum"]["loss_percent"]) / 100
+            received_rate = 1 - float(data["end"]["sum"]["lost_percent"]) / 100
             bits_per_second = (
                 float(data["end"]["sum"]["bits_per_second"]) * received_rate
             )
