@@ -1,8 +1,8 @@
 from kubernetes import client, config, watch
 import subprocess
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 
-from shared.config import BenchmarkConfig, get_benchmark_config
+from shared.config import BenchType, BenchmarkConfig, get_benchmark_config
 from shared.util import exp_range
 
 IPERF_SERVER_DEPLOYMENT = "k8s/deployments/server_iperf.yaml"
@@ -28,13 +28,14 @@ PodConfig = TypedDict(
     },
 )
 
-Pods = TypedDict(   
+Pods = TypedDict(
     "Pods",
     {
         "clients": List[PodConfig],
         "servers": List[PodConfig],
     },
 )
+
 
 def wait_for_deployment_ready(deployment_name: str):
     w = watch.Watch()
@@ -45,9 +46,9 @@ def wait_for_deployment_ready(deployment_name: str):
         label_selector=f"app={deployment_name}",
         timeout_seconds=60,
     ):
-        if event["type"] == "MODIFIED": # type: ignore
-            deployment = event["object"] # type: ignore
-            if deployment.status.ready_replicas == deployment.spec.replicas: # type: ignore
+        if event["type"] == "MODIFIED":  # type: ignore
+            deployment = event["object"]  # type: ignore
+            if deployment.status.ready_replicas == deployment.spec.replicas:  # type: ignore
                 print(f"Deployment {deployment_name} is ready.")
                 w.stop()
                 break
@@ -108,9 +109,9 @@ def k8s_teardown(server_deployment: str, client_deployment: str):
 
 
 def run_iperf3_benchmark(
-    benchmark_config: BenchmarkConfig, pods: Pods, overlay: str
+    benchmark_config: BenchmarkConfig, pods: Pods, bench_type: BenchType, overlay: str
 ):
-    print("Running iperf3 benchmark...")
+    print(f"Running {bench_type.value} iperf3 benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
@@ -130,6 +131,8 @@ def run_iperf3_benchmark(
                 str(benchmark_config["duration"]),
                 "--json",
             ]
+            if bench_type == BenchType.UDP:
+                cmd += ["-u", "-b", "0"]  # UDP, no bandwidth limit
 
             processes.append(
                 subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -144,7 +147,7 @@ def run_iperf3_benchmark(
             else:
                 # Export the output to a file
                 with open(
-                    f"logs/k8s/{overlay}/client_log_throughput_{n_flows}_flows_{i}.json",
+                    f"logs/k8s/{overlay}/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -154,9 +157,9 @@ def run_iperf3_benchmark(
 
 
 def run_netperf_benchmark(
-    benchmark_config: BenchmarkConfig, pods: Pods, overlay: str
+    benchmark_config: BenchmarkConfig, pods: Pods, bench_type: BenchType, overlay: str
 ):
-    print("Running netperf benchmark...")
+    print(f"Running {bench_type.value} netperf benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
@@ -173,7 +176,7 @@ def run_netperf_benchmark(
                 "-H",
                 server["ip"],
                 "-t",  # Test type
-                "TCP_STREAM",  # TCP stream test
+                f"{bench_type.value}_RR",
                 "-C",  # Report remote CPU utilization
                 "-i",  # number of iterations
                 str(benchmark_config["iterations"]),
@@ -192,7 +195,7 @@ def run_netperf_benchmark(
             else:
                 # Export the output to a file
                 with open(
-                    f"logs/k8s/{overlay}/client_log_netperf_{n_flows}_flows_{i}.txt",
+                    f"logs/k8s/{overlay}/{bench_type.value.lower()}/client_log_netperf_{n_flows}_flows_{i}.txt",
                     "w",
                     encoding="utf-8",
                 ) as f:
@@ -201,25 +204,48 @@ def run_netperf_benchmark(
     print("netperf benchmark completed for all flows.")
 
 
-def run_benchmark(overlay: str):
+def run_benchmark(bench_type: Optional[BenchType], overlay: str):
     benchmark_config = get_benchmark_config()
     load_kube_config()
 
     # Clear logs
-    subprocess.run(["mkdir", "-p", f"logs/k8s/{overlay}"])
-    subprocess.run(
-        ["find", f"logs/k8s/{overlay}", "-name", "*.json", "-delete"], check=True
-    )
-    subprocess.run(
-        ["find", f"logs/k8s/{overlay}", "-name", "*.txt", "-delete"], check=True
-    )
+    for bt in [bench_type] if bench_type else BenchType:
+        subprocess.run(["mkdir", "-p", f"logs/k8s/{overlay}/{bt.value.lower()}"])
+        subprocess.run(
+            [
+                "find",
+                f"logs/k8s/{overlay}/{bt.value.lower()}",
+                "-name",
+                "*.json",
+                "-delete",
+            ],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "find",
+                f"logs/k8s/{overlay}/{bt.value.lower()}",
+                "-name",
+                "*.txt",
+                "-delete",
+            ],
+            check=True,
+        )
 
     # Run iperf3 benchmark
     pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
-    run_iperf3_benchmark(benchmark_config, pods, overlay)
+    if bench_type is None:
+        for bt in BenchType:
+            run_iperf3_benchmark(benchmark_config, pods, bt, overlay)
+    else:
+        run_iperf3_benchmark(benchmark_config, pods, bench_type, overlay)
     k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
 
     # Run netperf benchmark
     pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
-    run_netperf_benchmark(benchmark_config, pods, overlay)
+    if bench_type is None:
+        for bt in BenchType:
+            run_netperf_benchmark(benchmark_config, pods, bt, overlay)
+    else:
+        run_netperf_benchmark(benchmark_config, pods, bench_type, overlay)
     k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)

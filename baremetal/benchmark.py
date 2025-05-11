@@ -142,7 +142,7 @@ def run_benchmark(bench_type: Optional[BenchType] = None):
     spec_config = load_config("config/baremetal.toml")
 
     # Clear logs
-    for b in BenchType:
+    for b in [bench_type] if bench_type else BenchType:
         subprocess.run(
             ["mkdir", "-p", f"logs/baremetal/{b.value.lower()}"],
             check=True,

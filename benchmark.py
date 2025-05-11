@@ -7,7 +7,7 @@ from shared.config import BenchType
 from shared.setup import get_role
 
 BAREMETAL_OUTPUT_FILE = "results/{bench_type}_baremetal_output.csv"
-K8S_OUTPUT_FILE = "results/k8s_output_{overlay}.csv"
+K8S_OUTPUT_FILE = "results/{bench_type}_k8s_output_{overlay}.csv"
 
 
 def main():
@@ -54,7 +54,14 @@ def main():
                     bench_type,
                 )
         elif args.benchmark == "k8s":
-            k8s_parse(K8S_OUTPUT_FILE.format(overlay=args.overlay), args.overlay)
+            for bench_type in BenchType:
+                k8s_parse(
+                    K8S_OUTPUT_FILE.format(
+                        bench_type=bench_type.value.lower(), overlay=args.overlay
+                    ),
+                    bench_type,
+                    args.overlay,
+                )
         return
 
     if args.benchmark == "baremetal":
@@ -69,8 +76,15 @@ def main():
                 )
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
-        k8s_benchmark(args.overlay)
-        k8s_parse(K8S_OUTPUT_FILE.format(overlay=args.overlay), args.overlay)
+        k8s_benchmark(BenchType.into(args.mode), args.overlay)
+        for bench_type in BenchType:
+            k8s_parse(
+                K8S_OUTPUT_FILE.format(
+                    bench_type=bench_type.value.lower(), overlay=args.overlay
+                ),
+                bench_type,
+                args.overlay,
+            )
 
 
 if __name__ == "__main__":
