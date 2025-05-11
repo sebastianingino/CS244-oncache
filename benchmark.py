@@ -4,6 +4,7 @@ from baremetal.parse import run_parse as baremetal_parse
 from k8s.benchmark import run_benchmark as k8s_benchmark
 from k8s.parse import run_parse as k8s_parse
 from shared.config import BenchType
+from shared.setup import get_role
 
 BAREMETAL_OUTPUT_FILE = "results/baremetal_output.csv"
 K8S_OUTPUT_FILE = "results/k8s_output_{}.csv"
@@ -54,9 +55,10 @@ def main():
         return
 
     if args.benchmark == "baremetal":
+        role = get_role()
         print("Running baremetal benchmark...")
         baremetal_benchmark(BenchType.into(args.mode))
-        if get_role() == "primary":
+        if role == "primary":
             for bench_type in BenchType:
                 baremetal_parse(BAREMETAL_OUTPUT_FILE, bench_type)
     elif args.benchmark == "k8s":

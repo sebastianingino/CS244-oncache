@@ -6,11 +6,10 @@ from shared.setup import get_role
 from shared.util import exp_range
 
 
-def run_client(
+def run_client_iperf(
     benchmark_config: BenchmarkConfig, destination: str, bench_type: BenchType
 ):
-    # IPerf Throughput Benchmark
-    print("Running iperf3 benchmark (client)")
+    print(f"Running iperf3 benchmark for {bench_type.value} (client)")
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
@@ -32,10 +31,12 @@ def run_client(
             cmd.append("-u")  # UDP test
         subprocess.run(cmd, check=True)
     print(f"iperf3 {bench_type.value} throughput benchmark completed for all flows.")
-    input("Press Enter to continue to the next benchmark...")
 
-    # Netperf RR Benchmark
-    print("Running netperf benchmark (client)")
+
+def run_client_netperf(
+    benchmark_config: BenchmarkConfig, destination: str, bench_type: BenchType
+):
+    print(f"Running netperf benchmark for {bench_type.value} (client)")
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
@@ -74,6 +75,26 @@ def run_client(
     print(f"netperf {bench_type.value} RR benchmark completed for all flows.")
 
 
+def run_client(
+    benchmark_config: BenchmarkConfig, destination: str, bench_type: Optional[BenchType]
+):
+    # IPerf Throughput Benchmark
+    if bench_type is None:
+        for bt in BenchType:
+            run_client_iperf(benchmark_config, destination, bt)
+    else:
+        run_client_iperf(benchmark_config, destination, bench_type)
+
+    input("Press Enter to continue to the next benchmark...")
+
+    # Netperf RR Benchmark
+    if bench_type is None:
+        for bt in BenchType:
+            run_client_netperf(benchmark_config, destination, bt)
+    else:
+        run_client_netperf(benchmark_config, destination, bench_type)
+
+
 def run_server(benchmark_config: BenchmarkConfig):
     # iperf3 throughput benchmark
     cmd = [
@@ -82,7 +103,7 @@ def run_server(benchmark_config: BenchmarkConfig):
         "-p",
         str(benchmark_config["port_start"]),
         "--logfile",
-        f"logs/baremetal/server_log_throughput_flows.json",
+        "logs/baremetal/server_log_throughput_flows.json",
         "--json",  # Output in JSON format for easier parsing
     ]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -114,33 +135,20 @@ def run_server(benchmark_config: BenchmarkConfig):
     print("netserver terminated successfully.")
 
 
-def run_benchmark_type(
-    bench_type: BenchType, general_config: BenchmarkConfig, spec_config: dict
-):
-    role = get_role()
-    if role == "primary":
-        destination = spec_config["node"]["secondary"]["ip"]
-        run_client(general_config, destination, bench_type)
-    elif role == "secondary":
-        run_server(general_config)
-    else:
-        raise ValueError(f"Unknown role: {role}. Expected 'primary' or 'secondary'.")
-
-
 def run_benchmark(bench_type: Optional[BenchType] = None):
     general_config = get_benchmark_config()
     spec_config = load_config("config/baremetal.toml")
 
     # Clear logs
-    for bench_type in BenchType:
+    for b in BenchType:
         subprocess.run(
-            ["mkdir", "-p", f"logs/baremetal/{bench_type.value.lower()}"],
+            ["mkdir", "-p", f"logs/baremetal/{b.value.lower()}"],
             check=True,
         )
         subprocess.run(
             [
                 "find",
-                f"logs/baremetal/{bench_type.value.lower()}",
+                f"logs/baremetal/{b.value.lower()}",
                 "-name",
                 "*.json",
                 "-delete",
@@ -150,7 +158,7 @@ def run_benchmark(bench_type: Optional[BenchType] = None):
         subprocess.run(
             [
                 "find",
-                f"logs/baremetal/{bench_type.value.lower()}",
+                f"logs/baremetal/{b.value.lower()}",
                 "-name",
                 "*.txt",
                 "-delete",
@@ -158,11 +166,13 @@ def run_benchmark(bench_type: Optional[BenchType] = None):
             check=True,
         )
 
-    if bench_type is None:
-        for bench_type in BenchType:
-            print(f"Running benchmark for {bench_type.value}...")
-            run_benchmark_type(bench_type, general_config, spec_config)
+    role = get_role()
+    if role == "primary":
+        destination = spec_config["node"]["secondary"]["ip"]
+        run_client(general_config, destination, bench_type)
+    elif role == "secondary":
+        run_server(general_config)
     else:
-        print(f"Running benchmark for {bench_type.value}...")
-        run_benchmark_type(bench_type, general_config, spec_config)
+        raise ValueError(f"Unknown role: {role}. Expected 'primary' or 'secondary'.")
+
     print("Benchmark completed.")
