@@ -24,17 +24,17 @@ Graph = TypedDict(
 
 DATA_CONFIG: Dict[str, DataConfig] = {
     "baremetal": {
-        "filename": "results/baremetal_output.csv",
+        "filename": "results/{}_baremetal_output.csv",
         "label": "Bare Metal",
         "color": "blue",
     },
     "k8s-antrea": {
-        "filename": "results/k8s_output_antrea.csv",
+        "filename": "results/{}_k8s_output_antrea.csv",
         "label": "Antrea",
         "color": "orange",
     },
     "k8s-cilium": {
-        "filename": "results/k8s_output_cilium.csv",
+        "filename": "results/{}_k8s_output_cilium.csv",
         "label": "Cilium",
         "color": "green",
     },
@@ -42,36 +42,36 @@ DATA_CONFIG: Dict[str, DataConfig] = {
 
 GRAPHS: List[Graph] = [
     {
-        "title": "TCP Throughput",
+        "title": "{} Throughput",
         "xlabel": "Flows",
         "ylabel": "Gbps",
-        "column": "TCP Throughput",
+        "column": "{} Throughput",
     },
     {
-        "title": "TCP Throughput CPU",
+        "title": "{} Throughput CPU",
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
-        "column": "TCP Throughput CPU",
+        "column": "{} Throughput CPU",
         "map": lambda point, name, df: point
-        / df[name]["TCP Throughput"]
-        * df[SCALE_KEY]["TCP Throughput"]
+        / df[name]["{} Throughput"]
+        * df[SCALE_KEY]["{} Throughput"]
         / 1e2,  # Percentage
     },
     {
-        "title": "TCP RR",
+        "title": "{} RR",
         "xlabel": "Flows",
         "ylabel": "kRequests/s",
-        "column": "TCP RR",
+        "column": "{} RR",
         "map": lambda point, name, df: point / 1e3,  # Convert to kRequests/s
     },
     {
-        "title": "TCP RR CPU",
+        "title": "{} RR CPU",
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
-        "column": "TCP RR CPU",
+        "column": "{} RR CPU",
         "map": lambda point, name, df: point
-        / df[name]["TCP RR"]
-        * df[SCALE_KEY]["TCP RR"]
+        / df[name]["{} RR"]
+        * df[SCALE_KEY]["{} RR"]
         / 1e2,  # Percentage
     },
 ]

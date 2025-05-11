@@ -8,10 +8,10 @@ from shared.util import exp_range
 BITS_TO_GBPS = 1_000_000_000
 CSV_FIELDS = [
     "Flows",
-    "{bench_type} Throughput",
-    "{bench_type} Throughput CPU",
-    "{bench_type} RR",
-    "{bench_type} RR CPU",
+    "Throughput",
+    "Throughput CPU",
+    "RR",
+    "RR CPU",
 ]
 THROUGHPUT_PATTERN = (
     "logs/baremetal/{bench_type}/client_log_throughput_{n_flows}_flows.json"
@@ -36,10 +36,8 @@ def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, f
         num_flows = int(data["start"]["test_start"]["num_streams"])
 
         return {
-            f"{bench_type.value} Throughput": bits_per_second
-            / BITS_TO_GBPS
-            / num_flows,
-            f"{bench_type.value} Throughput CPU": cpu_utilization / num_flows,
+            "Throughput": bits_per_second / BITS_TO_GBPS / num_flows,
+            "Throughput CPU": cpu_utilization / num_flows,
         }
 
 
@@ -63,8 +61,8 @@ def parse_rr_single(
         average_rate = sum(rates) / len(rates)
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {
-            f"{bench_type.value} RR": average_rate,
-            f"{bench_type.value} RR CPU": average_cpu_usage
+            "RR": average_rate,
+            "RR CPU": average_cpu_usage
             / num_flows,  # avg cpu will read the same for all flows
         }
 
@@ -136,9 +134,7 @@ def run_parse(output_file: str, bench_type: BenchType) -> None:
         )
     )
 
-    fields = [field.format(bench_type=bench_type.value) for field in CSV_FIELDS]
-
-    for field in fields:
+    for field in CSV_FIELDS:
         if field not in results:
             results[field] = []
         if field in throughput_results:
@@ -148,12 +144,12 @@ def run_parse(output_file: str, bench_type: BenchType) -> None:
 
     # Write the results to a CSV file
     with open(output_file, "w") as f:
-        writer = csv.DictWriter(f, fieldnames=fields)
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
         writer.writeheader()
         writer.writerows(
             [
-                {field: results[field][i] for field in fields}
-                for i in range(len(results[fields[0]]))
+                {field: results[field][i] for field in CSV_FIELDS}
+                for i in range(len(results[CSV_FIELDS[0]]))
             ]
         )
     print(f"Results saved to {output_file}")
