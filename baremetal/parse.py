@@ -2,22 +2,24 @@ import csv
 import json
 from typing import Dict, List
 
-from shared.config import BenchmarkConfig, get_benchmark_config
+from shared.config import BenchType, BenchmarkConfig, get_benchmark_config
 from shared.util import exp_range
 
 BITS_TO_GBPS = 1_000_000_000
 CSV_FIELDS = [
     "Flows",
-    "TCP Throughput",
-    "TCP Throughput CPU",
-    "TCP RR",
-    "TCP RR CPU",
+    "{bench_type} Throughput",
+    "{bench_type} Throughput CPU",
+    "{bench_type} RR",
+    "{bench_type} RR CPU",
 ]
-THROUGHPUT_PATTERN = "logs/baremetal/client_log_throughput_{}_flows.json"
-RR_PATTERN = "logs/baremetal/client_log_rr_{}_flows.txt"
+THROUGHPUT_PATTERN = (
+    "logs/baremetal/{bench_type}/client_log_throughput_{n_flows}_flows.json"
+)
+RR_PATTERN = "logs/baremetal/{bench_type}/client_log_rr_{n_flows}_flows.txt"
 
 
-def parse_throughput_single(filename: str) -> Dict[str, float]:
+def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, float]:
     """
     Parse the throughput data from the iperf3 JSON output file.
     """
@@ -25,18 +27,20 @@ def parse_throughput_single(filename: str) -> Dict[str, float]:
         data = json.load(f)
 
         bits_per_second = float(data["end"]["sum_sent"]["bits_per_second"])
-        cpu_utilization = float(
-            data["end"]["cpu_utilization_percent"]["remote_total"]
-        )
+        cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
         num_flows = int(data["start"]["test_start"]["num_streams"])
 
         return {
-            "TCP Throughput": bits_per_second / BITS_TO_GBPS / num_flows,
-            "TCP Throughput CPU": cpu_utilization / num_flows,
+            f"{bench_type.value} Throughput": bits_per_second
+            / BITS_TO_GBPS
+            / num_flows,
+            f"{bench_type.value} Throughput CPU": cpu_utilization / num_flows,
         }
 
 
-def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
+def parse_rr_single(
+    filename: str, num_flows: int, bench_type: BenchType
+) -> Dict[str, float]:
     """
     Parse the RR data from the netperf output file.
     """
@@ -54,13 +58,14 @@ def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
         average_rate = sum(rates) / len(rates)
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {
-            "TCP RR": average_rate,
-            "TCP RR CPU": average_cpu_usage / num_flows, # avg cpu will read the same for all flows
+            f"{bench_type.value} RR": average_rate,
+            f"{bench_type.value} RR CPU": average_cpu_usage
+            / num_flows,  # avg cpu will read the same for all flows
         }
 
 
 def parse_throughput_many(
-    benchmark_config: BenchmarkConfig, pattern: str
+    benchmark_config: BenchmarkConfig, bench_type: BenchType, pattern: str
 ) -> Dict[str, List[float]]:
     """
     Parse the throughput data from multiple iperf3 JSON output files.
@@ -71,7 +76,10 @@ def parse_throughput_many(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        result = parse_throughput_single(pattern.format(n_flows))
+        result = parse_throughput_single(
+            pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows),
+            bench_type,
+        )
         for field, item in result.items():
             if field not in results:
                 results[field] = []
@@ -80,7 +88,7 @@ def parse_throughput_many(
 
 
 def parse_rr_many(
-    benchmark_config: BenchmarkConfig, pattern: str
+    benchmark_config: BenchmarkConfig, bench_type: BenchType, pattern: str
 ) -> Dict[str, List[float]]:
     """
     Parse the RR data from multiple netperf output files.
@@ -91,7 +99,11 @@ def parse_rr_many(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        result = parse_rr_single(pattern.format(n_flows), n_flows)
+        result = parse_rr_single(
+            pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows),
+            n_flows,
+            BenchType.UDP,
+        )
         for field, item in result.items():
             if field not in results:
                 results[field] = []
@@ -99,13 +111,13 @@ def parse_rr_many(
     return results
 
 
-def run_parse(output_file: str):
+def run_parse(output_file: str, bench_type: BenchType) -> None:
     """
     Run the parsing of the throughput and RR data and save it to a CSV file.
     """
     benchmark_config = get_benchmark_config()
-    throughput_results = parse_throughput_many(benchmark_config, THROUGHPUT_PATTERN)
-    rr_results = parse_rr_many(benchmark_config, RR_PATTERN)
+    throughput_results = parse_throughput_many(benchmark_config, bench_type, THROUGHPUT_PATTERN)
+    rr_results = parse_rr_many(benchmark_config, bench_type, RR_PATTERN)
 
     # Combine the results
     results = {}

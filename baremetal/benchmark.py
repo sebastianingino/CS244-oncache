@@ -10,7 +10,7 @@ def run_client(
     benchmark_config: BenchmarkConfig, destination: str, bench_type: BenchType
 ):
     # IPerf Throughput Benchmark
-    print("Running iperf3 benchmark (Client)")
+    print("Running iperf3 benchmark (client)")
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):

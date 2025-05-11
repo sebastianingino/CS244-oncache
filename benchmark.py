@@ -3,6 +3,7 @@ from baremetal.benchmark import run_benchmark as baremetal_benchmark
 from baremetal.parse import run_parse as baremetal_parse
 from k8s.benchmark import run_benchmark as k8s_benchmark
 from k8s.parse import run_parse as k8s_parse
+from shared.config import BenchType
 
 BAREMETAL_OUTPUT_FILE = "results/baremetal_output.csv"
 K8S_OUTPUT_FILE = "results/k8s_output_{}.csv"
@@ -25,6 +26,14 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "-m",
+        "--mode",
+        type=str,
+        help="The mode of the benchmark to run",
+        choices=["tcp", "udp"],
+        default=None,
+    )
+    parser.add_argument(
         "--parse-only",
         action="store_true",
         help="Only parse the results without running the benchmark",
@@ -38,15 +47,18 @@ def main():
     if args.parse_only:
         print("Parsing results only...")
         if args.benchmark == "baremetal":
-            baremetal_parse(BAREMETAL_OUTPUT_FILE)
+            for bench_type in BenchType:
+               baremetal_parse(BAREMETAL_OUTPUT_FILE, bench_type)
         elif args.benchmark == "k8s":
             k8s_parse(K8S_OUTPUT_FILE.format(args.overlay), args.overlay)
         return
 
     if args.benchmark == "baremetal":
         print("Running baremetal benchmark...")
-        baremetal_benchmark()
-        baremetal_parse(BAREMETAL_OUTPUT_FILE)
+        baremetal_benchmark(BenchType.into(args.mode))
+        if get_role() == "primary":
+            for bench_type in BenchType:
+                baremetal_parse(BAREMETAL_OUTPUT_FILE, bench_type)
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
         k8s_benchmark(args.overlay)
