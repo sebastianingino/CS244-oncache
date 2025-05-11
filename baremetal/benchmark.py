@@ -65,7 +65,7 @@ def run_client_netperf(
                 print(
                     f"Error in netperf for {n_flows} flows: {p.stderr.read().decode()}"
                 )
-        print(f"Netperf completed successfully for {n_flows} flows.")
+        print(f"netperf completed successfully for {n_flows} flows.")
         for i, p in enumerate(processes):
             # Export the output to a file
             with open(
@@ -80,7 +80,7 @@ def run_client_netperf(
 def run_client(
     benchmark_config: BenchmarkConfig, destination: str, bench_type: Optional[BenchType]
 ):
-    # IPerf Throughput Benchmark
+    # iperf Throughput Benchmark
     if bench_type is None:
         for bt in BenchType:
             run_client_iperf(benchmark_config, destination, bt)
@@ -89,7 +89,7 @@ def run_client(
 
     input("Press Enter to continue to the next benchmark...")
 
-    # Netperf RR Benchmark
+    # netperf RR Benchmark
     if bench_type is None:
         for bt in BenchType:
             run_client_netperf(benchmark_config, destination, bt)

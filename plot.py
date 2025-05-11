@@ -3,6 +3,7 @@ import os
 from typing import Any, Callable, Dict, List, NotRequired, TypedDict
 import pandas as pd
 import matplotlib.pyplot as plt
+from shared.config import BenchType
 
 SCALE_KEY = "k8s-antrea"
 
@@ -45,39 +46,39 @@ GRAPHS: List[Graph] = [
         "title": "{} Throughput",
         "xlabel": "Flows",
         "ylabel": "Gbps",
-        "column": "{} Throughput",
+        "column": "Throughput",
     },
     {
         "title": "{} Throughput CPU",
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
-        "column": "{} Throughput CPU",
+        "column": "Throughput CPU",
         "map": lambda point, name, df: point
-        / df[name]["{} Throughput"]
-        * df[SCALE_KEY]["{} Throughput"]
+        / df[name]["Throughput"]
+        * df[SCALE_KEY]["Throughput"]
         / 1e2,  # Percentage
     },
     {
         "title": "{} RR",
         "xlabel": "Flows",
         "ylabel": "kRequests/s",
-        "column": "{} RR",
+        "column": "RR",
         "map": lambda point, name, df: point / 1e3,  # Convert to kRequests/s
     },
     {
         "title": "{} RR CPU",
         "xlabel": "Flows",
         "ylabel": "Virtual Cores",
-        "column": "{} RR CPU",
+        "column": "RR CPU",
         "map": lambda point, name, df: point
-        / df[name]["{} RR"]
-        * df[SCALE_KEY]["{} RR"]
+        / df[name]["RR"]
+        * df[SCALE_KEY]["RR"]
         / 1e2,  # Percentage
     },
 ]
 
 
-def load_data() -> Dict[str, pd.DataFrame]:
+def load_data(bench_type: BenchType) -> Dict[str, pd.DataFrame]:
     """
     Load the data from the configuration.
 
@@ -86,7 +87,7 @@ def load_data() -> Dict[str, pd.DataFrame]:
     """
     data = {}
     for name, config in DATA_CONFIG.items():
-        filename = config["filename"]
+        filename = config["filename"].format(bench_type.value.lower())
         if not os.path.exists(filename):
             raise FileNotFoundError(f"File {filename} does not exist.")
         df = pd.read_csv(filename)
@@ -119,7 +120,9 @@ def load_data() -> Dict[str, pd.DataFrame]:
     return joined_data
 
 
-def plot_data(data: Dict[str, pd.DataFrame], output: str, show: bool) -> None:
+def plot_data(
+    data: Dict[str, pd.DataFrame], bench_type: BenchType, output: str, show: bool
+) -> None:
     """
     Plot the data from the given configuration.
 
@@ -142,12 +145,12 @@ def plot_data(data: Dict[str, pd.DataFrame], output: str, show: bool) -> None:
             )
             ax.set_xticks(range(len(df)))
             ax.set_xticklabels(df.index)
-        ax.set_title(graph["title"])
+        ax.set_title(graph["title"].format(bench_type.value))
         ax.set_xlabel(graph["xlabel"])
         ax.set_ylabel(graph["ylabel"])
 
     handles, labels = plts[-1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', ncol=len(DATA_CONFIG))
+    fig.legend(handles, labels, loc="upper center", ncol=len(DATA_CONFIG))
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.85)
@@ -165,20 +168,28 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="results/plot.png",
+        default="results/{}_plot.png",
         help="Output file for the plot.",
     )
-
+    parser.add_argument(
+        "-m",
+        "--mode",
+        type=str,
+        help="The mode of the benchmark to run",
+        choices=["tcp", "udp"],
+        default=None,
+    )
     parser.add_argument(
         "--show",
         action="store_true",
         help="Show the plot.",
     )
-
     args = parser.parse_args()
 
-    data = load_data()
-    plot_data(data, args.output, args.show)
+    bench_type = BenchType.into(args.mode)
+    for b in [bench_type] if bench_type else BenchType:
+        data = load_data(b)
+        plot_data(data, b, args.output.format(b.value), args.show)
 
 
 if __name__ == "__main__":
