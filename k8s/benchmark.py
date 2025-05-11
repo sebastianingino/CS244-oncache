@@ -2,7 +2,7 @@ from kubernetes import client, config, watch
 import subprocess
 from typing import List, TypedDict
 
-from shared.config import TCPBenchmarkConfig, get_benchmark_config
+from shared.config import BenchmarkConfig, get_benchmark_config
 from shared.util import exp_range
 
 IPERF_SERVER_DEPLOYMENT = "k8s/deployments/server_iperf.yaml"
@@ -108,7 +108,7 @@ def k8s_teardown(server_deployment: str, client_deployment: str):
 
 
 def run_iperf3_benchmark(
-    benchmark_config: TCPBenchmarkConfig, pods: Pods, overlay: str
+    benchmark_config: BenchmarkConfig, pods: Pods, overlay: str
 ):
     print("Running iperf3 benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
@@ -154,7 +154,7 @@ def run_iperf3_benchmark(
 
 
 def run_netperf_benchmark(
-    benchmark_config: TCPBenchmarkConfig, pods: Pods, overlay: str
+    benchmark_config: BenchmarkConfig, pods: Pods, overlay: str
 ):
     print("Running netperf benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
@@ -202,7 +202,7 @@ def run_netperf_benchmark(
 
 
 def run_benchmark(overlay: str):
-    benchmark_config = get_benchmark_config()["tcp"]
+    benchmark_config = get_benchmark_config()
     load_kube_config()
 
     # Clear logs

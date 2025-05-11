@@ -2,7 +2,7 @@ import csv
 import json
 from typing import Dict, List
 
-from shared.config import TCPBenchmarkConfig, get_benchmark_config
+from shared.config import BenchmarkConfig, get_benchmark_config
 from shared.util import exp_range
 
 BITS_TO_GBPS = 1_000_000_000
@@ -54,7 +54,7 @@ def parse_rr_single(filename: str, num_flows: int) -> Dict[str, float]:
 
 
 def parse_throughput_many(
-    benchmark_config: TCPBenchmarkConfig, pattern: str
+    benchmark_config: BenchmarkConfig, pattern: str
 ) -> Dict[str, List[float]]:
     results = {}
 
@@ -84,7 +84,7 @@ def parse_throughput_many(
 
 
 def parse_rr_many(
-    benchmark_config: TCPBenchmarkConfig, pattern: str
+    benchmark_config: BenchmarkConfig, pattern: str
 ) -> Dict[str, List[float]]:
     results = {}
 
@@ -117,7 +117,7 @@ def run_parse(output_file: str, overlay: str):
     """
     Run the parsing of the benchmark results and save them to a CSV file.
     """
-    benchmark_config = get_benchmark_config()["tcp"]
+    benchmark_config = get_benchmark_config()
     throughput_results = parse_throughput_many(
         benchmark_config, THROUGHPUT_PATTERN.format(overlay=overlay)
     )

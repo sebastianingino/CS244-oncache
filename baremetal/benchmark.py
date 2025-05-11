@@ -1,11 +1,11 @@
 import subprocess
 
-from shared.config import TCPBenchmarkConfig, get_benchmark_config, load_config
+from shared.config import BenchmarkConfig, get_benchmark_config, load_config
 from shared.setup import get_role
 from shared.util import exp_range
 
 
-def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
+def run_client(benchmark_config: BenchmarkConfig, destination: str):
     # IPerf Throughput Benchmark
     print("Running iperf3 benchmark (Client)")
     for n_flows in exp_range(
@@ -68,7 +68,7 @@ def run_client(benchmark_config: TCPBenchmarkConfig, destination: str):
     print("netperf rr benchmark completed for all flows.")
 
 
-def run_server(benchmark_config: TCPBenchmarkConfig):
+def run_server(benchmark_config: BenchmarkConfig):
     # iperf3 throughput benchmark
     cmd = [
         "iperf3",
@@ -109,7 +109,7 @@ def run_server(benchmark_config: TCPBenchmarkConfig):
 
 
 def run_benchmark():
-    general_config = get_benchmark_config()["tcp"]
+    general_config = get_benchmark_config()
     spec_config = load_config("config/baremetal.toml")
     role = get_role()
 

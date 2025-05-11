@@ -17,8 +17,8 @@ def load_config(path: str) -> dict:
     return config
 
 
-TCPBenchmarkConfig = TypedDict(
-    "TCPBenchmarkConfig",
+BenchmarkConfig = TypedDict(
+    "BenchmarkConfig",
     {
         "min_flows": int,
         "max_flows": int,
@@ -27,8 +27,6 @@ TCPBenchmarkConfig = TypedDict(
         "iterations": int,
     },
 )
-
-BenchmarkConfig = TypedDict("BenchmarkConfig", {"tcp": TCPBenchmarkConfig})
 
 
 def get_benchmark_config(path: str = "config/benchmark.toml") -> BenchmarkConfig:
