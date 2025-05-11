@@ -1,6 +1,10 @@
+from enum import Enum
 import tomllib
 from typing import TypedDict
 
+class BenchType(Enum):
+    UDP = "UDP"
+    TCP = "TCP"
 
 def load_config(path: str) -> dict:
     """
