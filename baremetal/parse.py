@@ -109,7 +109,7 @@ def run_parse(output_file: str):
 
     # Combine the results
     results = {}
-    results["FLOWS"] = list(
+    results["Flows"] = list(
         exp_range(
             benchmark_config["min_flows"],
             benchmark_config["max_flows"] + 1,
