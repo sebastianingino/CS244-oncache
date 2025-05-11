@@ -22,8 +22,8 @@ class BenchType(Enum):
                 return cls.TCP
             elif value.upper() == "UDP":
                 return cls.UDP
-        if value.isdigit():
-            value = int(value)
+            if value.isdigit():
+                value = int(value)
         if isinstance(value, int):
             if value == 0:
                 return cls.TCP
