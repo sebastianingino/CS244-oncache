@@ -178,3 +178,6 @@ cython_debug/
 
 # MacOS Finder
 .DS_Store
+
+*.o
+*.ll
