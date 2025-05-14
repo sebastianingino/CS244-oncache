@@ -120,6 +120,7 @@ int egress_init_prog(struct __sk_buff *skb) {
 
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
+    // Note: we expect encapsulation since we're attached to the host interface
     if (!skb || skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
         DEBUG_PRINT("Invalid skb\n");
         return TC_ACT_OK;
@@ -163,13 +164,13 @@ int egress_init_prog(struct __sk_buff *skb) {
             return TC_ACT_OK;
     }
 
-    // Check if the packet was not marked as missed
+    // Check if the packet is marked as missed
     if (!has_mark(inner, MISSED_MARK)) {
         DEBUG_PRINT("Packet not marked as missed\n");
         return TC_ACT_OK;
     }
 
-    // Check if the packet is not marked as established
+    // Check if the packet is marked as established
     if (!has_mark(inner, EST_MARK)) {
         DEBUG_PRINT("Packet not marked as established\n");
         return TC_ACT_OK;
@@ -263,6 +264,79 @@ int ingress_init_prog(struct __sk_buff *skb) {
 SEC("ingress")
 int ingress_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress called\n");
+
+    /** BEGIN: Packet Validation */
+    // Check if the skb is valid and is long enough
+    // Note: NO encapsulation since we're attached to the container veth
+    if (!skb || skb->len < sizeof(inner_headers_t)) {
+        DEBUG_PRINT("Invalid skb\n");
+        return TC_ACT_OK;
+    }
+
+    // Get the headers
+    inner_headers_t *inner = (inner_headers_t *)(skb->data);
+
+    // Check if the inner header is valid
+    if (inner->eth.h_proto != bpf_htons(ETH_P_IP)) {
+        DEBUG_PRINT("Invalid inner header\n");
+        return TC_ACT_OK;
+    }
+
+    // Check if the packet is marked as missed
+    if (!has_mark(inner, MISSED_MARK)) {
+        DEBUG_PRINT("Packet not marked as missed\n");
+        return TC_ACT_OK;
+    }
+    // Check if the packet is marked as established
+    if (!has_mark(inner, EST_MARK)) {
+        DEBUG_PRINT("Packet not marked as established\n");
+        return TC_ACT_OK;
+    }
+    /** END: Packet Validation */
+
+    /** BEGIN: Check Daemon State */
+    // Note: container destination IP -> veth index is maintained by the daemon
+    // and must exist ahead of time
+    struct ingress_data *data =
+        bpf_map_lookup_elem(&ingress_cache, &inner->ip.daddr);
+    if (!data) {
+        DEBUG_PRINT("Ingress data not found for IP: %u\n", inner->ip.daddr);
+        return TC_ACT_OK;
+    }
+    /** END: Check Daemon State */
+
+    /** BEGIN: Cache Initialization */
+    // Update the ingress cache with the inner MAC header
+    // Note: the veth index is maintained by the daemon
+    data->inner = inner->eth;
+
+    // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
+    // (ingress action, egress action) to the filter cache
+    struct flow_key key = to_flow_key((encap_headers_t *)inner);
+    struct filter_action action = {
+        .ingress = 1,
+        .egress = 0,
+    };
+    int err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
+    if (err) {
+        // If the entry already exists, update the ingress action
+        struct filter_action *existing_action =
+            bpf_map_lookup_elem(&filter_cache, &key);
+        if (existing_action) {
+            existing_action->ingress = 1;
+            DEBUG_PRINT("Updated filter_cache\n");
+        } else {
+            ERROR_PRINT("Failed to update filter_cache: %d\n", err);
+            return TC_ACT_OK;
+        }
+    } else {
+        DEBUG_PRINT("Updated filter_cache\n");
+    }
+    /** END: Cache Initialization */
+
+    // Clear packet marks
+    mark(inner, MISSED_MARK, 0);
+    mark(inner, EST_MARK, 0);
 
     return TC_ACT_OK;
 }
