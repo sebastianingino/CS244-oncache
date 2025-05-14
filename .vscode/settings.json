@@ -4,6 +4,10 @@
         "*.ejs": "html",
         "ebpf_plugin.h": "c",
         "bpf_helpers.h": "c",
-        "bpf.h": "c"
+        "bpf.h": "c",
+        "udp.h": "c",
+        "if_ether.h": "c",
+        "netfwd": "c",
+        "types.h": "c"
     }
 }

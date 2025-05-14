@@ -10,12 +10,12 @@
 
 struct egress_data {
     outer_headers_t outer;
-    inner_headers_t inner;
+    struct ethhdr inner;
     __u32 ifindex;
 };
 
 struct ingress_data {
-    inner_headers_t inner;
+    struct ethhdr inner;
     __u32 vindex;
 };
 

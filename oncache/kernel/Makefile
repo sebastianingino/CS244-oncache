@@ -13,9 +13,7 @@ $(BPF_OBJ): %.o: %.c  Makefile $(EXTRA_DEPS)
 	    $(CFLAGS) \
 		-I$(PROJ_DIR) \
 	    -Wall \
-	    -Wno-unused-value \
-	    -Wno-pointer-sign \
-	    -Wno-compare-distinct-pointer-types \
+		-Wno-int-to-pointer-cast \
 	    -Werror \
 	    -O2 -emit-llvm -c -g -o ${@:.o=.ll} $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
