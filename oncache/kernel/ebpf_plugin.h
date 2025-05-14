@@ -1,10 +1,11 @@
 #ifndef ONCACHE_PLUGIN_H
 #define ONCACHE_PLUGIN_H
+
 #include <linux/types.h>
+#include <bpf/bpf_endian.h>
+#include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_endian.h>
 
 #include "common/common.h"
 
@@ -28,8 +29,7 @@ struct flow_key {
 };
 
 struct filter_action {
-    __u8 ingress_action;
-    __u8 egress_action;
+    __u8 ingress : 1, egress : 1;
 };
 
 #endif  // ONCACHE_PLUGIN_H

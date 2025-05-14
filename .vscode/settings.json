@@ -8,6 +8,7 @@
         "udp.h": "c",
         "if_ether.h": "c",
         "netfwd": "c",
-        "types.h": "c"
+        "types.h": "c",
+        "bpf_endian.h": "c"
     }
 }
