@@ -256,15 +256,6 @@ SEC("ingress_init")
 int ingress_init_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress_init called\n");
 
-    return TC_ACT_OK;
-}
-
-// Ingress hook (called before ingress_init)
-// Attached to incoming packets, host interface
-SEC("ingress")
-int ingress_prog(struct __sk_buff *skb) {
-    DEBUG_PRINT("ingress called\n");
-
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: NO encapsulation since we're attached to the container veth
@@ -338,6 +329,15 @@ int ingress_prog(struct __sk_buff *skb) {
     mark(inner, MISSED_MARK, 0);
     mark(inner, EST_MARK, 0);
 
+    return TC_ACT_OK;
+}
+
+// Ingress hook (called before ingress_init)
+// Attached to incoming packets, host interface
+SEC("ingress")
+int ingress_prog(struct __sk_buff *skb) {
+    DEBUG_PRINT("ingress called\n");
+    
     return TC_ACT_OK;
 }
 
