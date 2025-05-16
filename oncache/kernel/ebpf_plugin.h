@@ -21,7 +21,7 @@ struct egress_data {
 // Ingress cache: container destination IP -> (inner MAC header, veth interface
 // index) vindex maintained by daemon, inner MAC header maintained by eBPF
 struct ingress_data {
-    struct ethhdr inner;
+    struct ethhdr eth;
     __u32 vindex;
 };
 
