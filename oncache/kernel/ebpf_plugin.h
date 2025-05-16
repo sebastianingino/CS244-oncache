@@ -2,7 +2,6 @@
 #define ONCACHE_PLUGIN_H
 
 #include <linux/types.h>
-
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
@@ -38,6 +37,12 @@ struct flow_key {
 // Filter action: ingress and egress allow (1) or deny (0)
 struct filter_action {
     __u8 ingress : 1, egress : 1;
+};
+
+// Interface map: interface index -> (MAC address, IP address)
+struct interface_data {
+    __u8 mac[ETH_ALEN];
+    addr_t ip;
 };
 
 #endif  // ONCACHE_PLUGIN_H

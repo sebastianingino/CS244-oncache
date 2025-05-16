@@ -9,6 +9,7 @@
         "if_ether.h": "c",
         "netfwd": "c",
         "types.h": "c",
-        "bpf_endian.h": "c"
+        "bpf_endian.h": "c",
+        "stdbool.h": "c"
     }
 }

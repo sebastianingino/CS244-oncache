@@ -9,27 +9,34 @@
 
 typedef __u32 addr_t;
 typedef __u8 bool_t;
+#define true 1
+#define false 0
 
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
 #define VXLAN_HEADER_LEN 8
 
 // Outer header structure: Ethernet + IP + UDP + VXLAN
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+#pragma pack(push, 1)
 typedef struct outer_headers_t {
     struct ethhdr eth;
     struct iphdr ip;
     struct udphdr udp;
     __u8 vxlan[VXLAN_HEADER_LEN];
 } outer_headers_t;
+#pragma pack(pop)
 
 // Inner header structure: Ethernet + IP
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+#pragma pack(push, 1)
 typedef struct inner_headers_t {
     struct ethhdr eth;
     struct iphdr ip;
 } inner_headers_t;
+#pragma pack(pop)
 
 // Inner header structure (superset): Ethernet + IP + TCP/UDP
+#pragma pack(push, 1)
 typedef struct encap_headers_t {
     struct ethhdr eth;
     struct iphdr ip;
@@ -38,5 +45,6 @@ typedef struct encap_headers_t {
         struct tcphdr tcp;
     };
 } encap_headers_t;
+#pragma pack(pop)
 
 #endif  // ONCACHE_COMMON_H
