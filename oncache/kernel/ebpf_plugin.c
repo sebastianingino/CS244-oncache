@@ -386,7 +386,7 @@ int egress_prog(struct __sk_buff *skb) {
                                 (hash % (VXLAN_UDP_PORT_MAX - VXLAN_UDP_PORT)));
     outer->udp.source = src_port;
 
-    return TC_ACT_OK;
+    return bpf_redirect(data->ifindex, 0);
 }
 
 // Ingress init hook
