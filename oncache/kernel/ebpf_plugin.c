@@ -154,10 +154,10 @@ int egress_init_prog(struct __sk_buff *skb) {
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: we expect encapsulation since we're attached to the host interface
-    // Additional note: skb->len is OK bc we're never going far enough to touch
-    // data not in direct packet access. Technically, we should check
-    // `skb->data_end - skb->data` but we're not going to do that here.
-    if (!skb || skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
+    // Additional note: we have to check skb->data_end and skb->data without
+    // subtraction due to the verifier not liking it otherwise.
+    if (!skb || skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t)) {
         DEBUG_PRINT("Invalid skb\n");
         return TC_ACT_OK;
     }
@@ -182,15 +182,17 @@ int egress_init_prog(struct __sk_buff *skb) {
     // Check if the inner packet is long enough
     switch (inner->ip.protocol) {
         case IPPROTO_TCP:
-            if (skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t) +
-                               sizeof(struct tcphdr)) {
+            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t) +
+                                    sizeof(struct tcphdr)) {
                 DEBUG_PRINT("Invalid inner TCP header\n");
                 return TC_ACT_OK;
             }
             break;
         case IPPROTO_UDP:
-            if (skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t) +
-                               sizeof(struct udphdr)) {
+            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t) +
+                                    sizeof(struct udphdr)) {
                 DEBUG_PRINT("Invalid inner UDP header\n");
                 return TC_ACT_OK;
             }
@@ -286,7 +288,7 @@ int egress_prog(struct __sk_buff *skb) {
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: NO encapsulation since we're attached to the host veth
-    if (!skb || skb->len < sizeof(inner_headers_t)) {
+    if (!skb || skb->data_end < skb->data + sizeof(inner_headers_t)) {
         DEBUG_PRINT("Invalid skb\n");
         return TC_ACT_OK;
     }
@@ -300,13 +302,15 @@ int egress_prog(struct __sk_buff *skb) {
     // Check if inner packet is long enough
     switch (headers->ip.protocol) {
         case IPPROTO_TCP:
-            if (skb->len < sizeof(inner_headers_t) + sizeof(struct tcphdr)) {
+            if (skb->data_end <
+                skb->data + sizeof(inner_headers_t) + sizeof(struct tcphdr)) {
                 DEBUG_PRINT("Invalid inner TCP header\n");
                 return TC_ACT_OK;
             }
             break;
         case IPPROTO_UDP:
-            if (skb->len < sizeof(inner_headers_t) + sizeof(struct udphdr)) {
+            if (skb->data_end <
+                skb->data + sizeof(inner_headers_t) + sizeof(struct udphdr)) {
                 DEBUG_PRINT("Invalid inner UDP header\n");
                 return TC_ACT_OK;
             }
@@ -376,7 +380,7 @@ int egress_prog(struct __sk_buff *skb) {
             BPF_F_ADJ_ROOM_ENCAP_L2(
                 sizeof(struct ethhdr)) |   // Reserve space for outer MAC header
             BPF_F_ADJ_ROOM_ENCAP_L2_ETH);  // L2 tunnel type: Ethernet
-    if (err || skb->len < sizeof(outer_headers_t)) {
+    if (err || skb->data_end < skb->data + sizeof(outer_headers_t)) {
         ERROR_PRINT("Failed to adjust skb room: %d\n", err);
         return TC_ACT_OK;
     }
@@ -384,21 +388,33 @@ int egress_prog(struct __sk_buff *skb) {
     // Set the outer headers
     outer_headers_t *outer = (outer_headers_t *)(skb->data);
     *outer = data->outer;
+    // Update the UDP length
+    outer->udp.len =
+        bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
     // Update the IP length and checksum
     __u16 old_len = outer->ip.tot_len;
     __u16 new_len = skb->len - sizeof(struct ethhdr);
     outer->ip.tot_len = bpf_htons(new_len);
-    // L3 checksum replacement is incremental :(
+    // L3 checksum replacement is incremental
+    // See: https://docs.ebpf.io/linux/helper-function/bpf_l3_csum_replace/
+    // Note: this makes me sad
     bpf_l3_csum_replace(skb,
                         sizeof(struct ethhdr) + offsetof(struct iphdr, check),
                         old_len, new_len, sizeof(__u16));
-    // Update the UDP length
-    outer->udp.len =
-        bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
 
-    // Set inner MAC header
+    // Re-check length due to L3 checksum replacement invalidating pointers
+    if (skb->data_end <
+        skb->data + sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
+        ERROR_PRINT("Failed to re-check skb length\n");
+        return TC_ACT_OK;
+    }
+
+    // Get headers
+    outer = (outer_headers_t *)(skb->data);
     inner_headers_t *inner =
         (inner_headers_t *)(skb->data + sizeof(outer_headers_t));
+
+    // Set inner MAC header
     inner->eth = data->inner;
 
     // Update the UDP source port
@@ -419,7 +435,7 @@ int ingress_init_prog(struct __sk_buff *skb) {
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: NO encapsulation since we're attached to the container veth
-    if (!skb || skb->len < sizeof(inner_headers_t)) {
+    if (!skb || skb->data_end < skb->data + sizeof(inner_headers_t)) {
         DEBUG_PRINT("Invalid skb\n");
         return TC_ACT_OK;
     }
@@ -501,7 +517,8 @@ int ingress_prog(struct __sk_buff *skb) {
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: we expect encapsulation since we're attached to the host interface
-    if (!skb || skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
+    if (!skb || skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t)) {
         DEBUG_PRINT("Invalid skb\n");
         return TC_ACT_OK;
     }
@@ -526,15 +543,17 @@ int ingress_prog(struct __sk_buff *skb) {
     // Check if the inner packet is long enough
     switch (inner->ip.protocol) {
         case IPPROTO_TCP:
-            if (skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t) +
-                               sizeof(struct tcphdr)) {
+            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t) +
+                                    sizeof(struct tcphdr)) {
                 DEBUG_PRINT("Invalid inner TCP header\n");
                 return TC_ACT_OK;
             }
             break;
         case IPPROTO_UDP:
-            if (skb->len < sizeof(outer_headers_t) + sizeof(inner_headers_t) +
-                               sizeof(struct udphdr)) {
+            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
+                                    sizeof(inner_headers_t) +
+                                    sizeof(struct udphdr)) {
                 DEBUG_PRINT("Invalid inner UDP header\n");
                 return TC_ACT_OK;
             }
@@ -604,10 +623,10 @@ int ingress_prog(struct __sk_buff *skb) {
 
     /** BEGIN: Step 3: Decapsulation and Intra-host Routing */
     int err = bpf_skb_adjust_room(
-        skb,    -(int)sizeof(outer_headers_t),
+        skb, -(int)sizeof(outer_headers_t),
         BPF_ADJ_ROOM_MAC,  // shrink at the MAC (between L2 and L3) layer
-        0); // No flags needed since we're shrinking the skb
-    if (err || skb->len < sizeof(inner_headers_t)) {
+        0);                // No flags needed since we're shrinking the skb
+    if (err || skb->data_end < skb->data + sizeof(inner_headers_t)) {
         ERROR_PRINT("Failed to adjust skb room: %d\n", err);
         return TC_ACT_OK;
     }
