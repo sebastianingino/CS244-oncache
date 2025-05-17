@@ -110,10 +110,10 @@ static inline void mark(inner_headers_t *inner, __u8 marker, bool_t set) {
 
 // Convert inner headers to flow key
 // See https://datatracker.ietf.org/doc/html/rfc791#section-3.1
-static inline bool_t to_flow_key(inner_headers_t *headers, __u32 data_end,
-                                 struct flow_key *key) {
+static inline bool_t to_flow_key(inner_headers_t *headers,
+                                 struct __sk_buff *skb, struct flow_key *key) {
     encap_headers_t *encap_headers = (encap_headers_t *)(headers);
-    if (data_end < (__u64)headers + sizeof(inner_headers_t)) {
+    if (skb->data_end < (__u64)headers + sizeof(inner_headers_t)) {
         return false;
     }
     key->src_ip = headers->ip.saddr;
@@ -121,16 +121,16 @@ static inline bool_t to_flow_key(inner_headers_t *headers, __u32 data_end,
     key->protocol = headers->ip.protocol;
     switch (headers->ip.protocol) {
         case IPPROTO_TCP:
-            if (data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
-                               sizeof(struct tcphdr)) {
+            if (skb->data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
+                                    sizeof(struct tcphdr)) {
                 return false;
             }
             key->src_port = encap_headers->tcp.source;
             key->dst_port = encap_headers->tcp.dest;
             break;
         case IPPROTO_UDP:
-            if (data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
-                               sizeof(struct udphdr)) {
+            if (skb->data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
+                                    sizeof(struct udphdr)) {
                 return false;
             }
             key->src_port = encap_headers->udp.source;
@@ -259,7 +259,7 @@ int egress_init_prog(struct __sk_buff *skb) {
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     struct flow_key key;
-    if (!to_flow_key(inner, skb->data_end, &key)) {
+    if (!to_flow_key(inner, skb, &key)) {
         DEBUG_PRINT("Failed to create flow key\n");
         return TC_ACT_OK;
     }
@@ -354,7 +354,7 @@ int egress_prog(struct __sk_buff *skb) {
     }
     // Check if the packet is allowed in the filter cache
     struct flow_key key;
-    if (!to_flow_key(headers, skb->data_end, &key)) {
+    if (!to_flow_key(headers, skb, &key)) {
         DEBUG_PRINT("Failed to create flow key\n");
         return TC_ACT_OK;
     }
@@ -496,7 +496,7 @@ int ingress_init_prog(struct __sk_buff *skb) {
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     struct flow_key key;
-    if (!to_flow_key(headers, skb->data_end, &key)) {
+    if (!to_flow_key(headers, skb, &key)) {
         DEBUG_PRINT("Failed to create flow key\n");
         return TC_ACT_OK;
     }
@@ -586,10 +586,11 @@ int ingress_prog(struct __sk_buff *skb) {
     /** BEGIN: Step 1: Destination Check */
     /** BEGIN: Interface Validation */
     // Get the interface data
+    __u32 ifindex = skb->ifindex;
     struct interface_data *interface_data =
-        bpf_map_lookup_elem(&interface_map, &skb->ifindex);
+        bpf_map_lookup_elem(&interface_map, &ifindex);
     if (!interface_data) {
-        ERROR_PRINT("Interface data not found for ifindex: %u\n", skb->ifindex);
+        ERROR_PRINT("Interface data not found for ifindex: %u\n", ifindex);
         return TC_ACT_OK;
     }
     // Check if the packet matches the interface data
@@ -616,7 +617,7 @@ int ingress_prog(struct __sk_buff *skb) {
     }
     // Check if the packet is allowed in the filter cache
     struct flow_key key;
-    if (!to_flow_key(inner, skb->data_end, &key)) {
+    if (!to_flow_key(inner, skb, &key)) {
         DEBUG_PRINT("Failed to create flow key\n");
         return TC_ACT_OK;
     }

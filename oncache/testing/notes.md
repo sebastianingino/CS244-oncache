@@ -2,7 +2,7 @@
 
 ## Setup
 
-We first want to set up an environment for testing. While we could do this the SMART way and use a VM, we will instead directly attach to the host kernel using the loopback interface. 
+We first want to set up an environment for testing. While we could do this the SMART way and use a VM, we will instead directly attach to the host kernel using a dummy interface.
 
 If you want to check what interfaces are available, you can use the following command:
 
@@ -10,16 +10,38 @@ If you want to check what interfaces are available, you can use the following co
 ip addr
 ```
 
-First, we add a qdisc (queueing discipline) to the loopback interface. This will allow us to test our eBPF program without needing to set up a VM or a container. We can use the following command to add a qdisc to the loopback interface:
+### Create a dummy interface
+We can create a dummy interface using the following command:
 
 ```bash
-sudo tc qdisc add dev lo clsact
+sudo ip link add dummy0 type dummy
 ```
 
-We can list the qdiscs on the loopback interface using the following command:
+We need to bring up the dummy interface using the following command:
 
 ```bash
-tc qdisc show dev lo
+sudo ip link set dummy0 up
+```
+
+### Remove the dummy interface
+To remove the dummy interface, we can use the following command:
+
+```bash
+sudo ip link del dummy0
+```
+
+### Add a qdisc to the dummy interface
+
+First, we add a qdisc (queueing discipline) to the dummy interface. This will allow us to test our eBPF program without needing to set up a VM or a container. We can use the following command to add a qdisc to the dummy interface:
+
+```bash
+sudo tc qdisc add dev dummy0 clsact
+```
+
+We can list the qdiscs on the dummy interface using the following command:
+
+```bash
+tc qdisc show dev dummy0
 ```
 
 You should see something like this:
@@ -28,21 +50,27 @@ You should see something like this:
 qdisc clsact ffff: parent ffff:fff1
 ```
 
+To remove the qdisc, we can use the following command:
+
+```bash
+sudo tc qdisc del dev dummy0 clsact
+```
+
 ## Load the eBPF program
 We can load the eBPF program using the following command:
 
 ```bash
-sudo tc filter add dev lo egress bpf da obj ./ebpf_plugin.o sec egress_init
+sudo tc filter add dev dummy0 egress bpf da obj ./ebpf_plugin.o sec egress_init
 ```
 
 To show the filters, we can use the following command:
 
 ```bash
-tc filter show dev lo egress
+tc filter show dev dummy0 egress
 ```
 
 To remove the filter, we can use the following command:
 
 ```bash
-sudo tc filter del dev lo egress
+sudo tc filter del dev dummy0 egress
 ```
