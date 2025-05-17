@@ -113,9 +113,6 @@ static inline void mark(inner_headers_t *inner, __u8 marker, bool_t set) {
 static inline bool_t to_flow_key(inner_headers_t *headers,
                                  struct __sk_buff *skb, struct flow_key *key) {
     encap_headers_t *encap_headers = (encap_headers_t *)(headers);
-    if (skb->data_end < (__u64)headers + sizeof(inner_headers_t)) {
-        return false;
-    }
     key->src_ip = headers->ip.saddr;
     key->dst_ip = headers->ip.daddr;
     key->protocol = headers->ip.protocol;
@@ -187,27 +184,11 @@ int egress_init_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
-    // Check if the inner packet is long enough
-    switch (inner->ip.protocol) {
-        case IPPROTO_TCP:
-            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
-                                    sizeof(inner_headers_t) +
-                                    sizeof(struct tcphdr)) {
-                DEBUG_PRINT("Invalid inner TCP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        case IPPROTO_UDP:
-            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
-                                    sizeof(inner_headers_t) +
-                                    sizeof(struct udphdr)) {
-                DEBUG_PRINT("Invalid inner UDP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        default:
-            DEBUG_PRINT("Unsupported protocol: %u\n", inner->ip.protocol);
-            return TC_ACT_OK;
+    // Get flow key and check if innner packet is long enough
+    struct flow_key key;
+    if (!to_flow_key(inner, skb, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
     }
 
     // Check if the packet is marked as missed
@@ -258,11 +239,6 @@ int egress_init_prog(struct __sk_buff *skb) {
 
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
-    struct flow_key key;
-    if (!to_flow_key(inner, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
-        return TC_ACT_OK;
-    }
     struct filter_action action = {
         .ingress = 0,
         .egress = 1,
@@ -311,25 +287,12 @@ int egress_prog(struct __sk_buff *skb) {
         DEBUG_PRINT("Ethernet packet does not contain IP\n");
         return TC_ACT_OK;
     }
-    // Check if inner packet is long enough
-    switch (headers->ip.protocol) {
-        case IPPROTO_TCP:
-            if (skb->data_end <
-                skb->data + sizeof(inner_headers_t) + sizeof(struct tcphdr)) {
-                DEBUG_PRINT("Invalid inner TCP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        case IPPROTO_UDP:
-            if (skb->data_end <
-                skb->data + sizeof(inner_headers_t) + sizeof(struct udphdr)) {
-                DEBUG_PRINT("Invalid inner UDP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        default:
-            DEBUG_PRINT("Unsupported protocol: %u\n", headers->ip.protocol);
-            return TC_ACT_OK;
+
+    // Get flow key and check if the packet is long enough
+    struct flow_key key;
+    if (!to_flow_key(headers, skb, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
     }
     /** END: Packet Validation */
 
@@ -353,11 +316,6 @@ int egress_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
-    struct flow_key key;
-    if (!to_flow_key(headers, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
-        return TC_ACT_OK;
-    }
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
         DEBUG_PRINT("Filter action not found for flow key\n");
@@ -465,6 +423,13 @@ int ingress_init_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
+    // Get flow key and check if the packet is long enough
+    struct flow_key key;
+    if (!to_flow_key(headers, skb, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
+    }
+
     // Check if the packet is marked as missed
     if (!has_mark(headers, MISSED_MARK)) {
         DEBUG_PRINT("Packet not marked as missed\n");
@@ -495,11 +460,6 @@ int ingress_init_prog(struct __sk_buff *skb) {
 
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
-    struct flow_key key;
-    if (!to_flow_key(headers, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
-        return TC_ACT_OK;
-    }
     struct filter_action action = {
         .ingress = 1,
         .egress = 0,
@@ -560,27 +520,11 @@ int ingress_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
-    // Check if the inner packet is long enough
-    switch (inner->ip.protocol) {
-        case IPPROTO_TCP:
-            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
-                                    sizeof(inner_headers_t) +
-                                    sizeof(struct tcphdr)) {
-                DEBUG_PRINT("Invalid inner TCP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        case IPPROTO_UDP:
-            if (skb->data_end < skb->data + sizeof(outer_headers_t) +
-                                    sizeof(inner_headers_t) +
-                                    sizeof(struct udphdr)) {
-                DEBUG_PRINT("Invalid inner UDP header\n");
-                return TC_ACT_OK;
-            }
-            break;
-        default:
-            DEBUG_PRINT("Unsupported protocol: %u\n", inner->ip.protocol);
-            return TC_ACT_OK;
+    // Get flow key and check if the inner packet is long enough
+    struct flow_key key;
+    if (!to_flow_key(inner, skb, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
     }
 
     /** BEGIN: Step 1: Destination Check */
@@ -616,11 +560,6 @@ int ingress_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
-    struct flow_key key;
-    if (!to_flow_key(inner, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
-        return TC_ACT_OK;
-    }
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
         DEBUG_PRINT("Filter action not found for flow key\n");
