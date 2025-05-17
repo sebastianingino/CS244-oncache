@@ -110,29 +110,37 @@ static inline void mark(inner_headers_t *inner, __u8 marker, bool_t set) {
 
 // Convert inner headers to flow key
 // See https://datatracker.ietf.org/doc/html/rfc791#section-3.1
-static inline struct flow_key to_flow_key(encap_headers_t *inner) {
-    struct flow_key key = {
-        .src_ip = inner->ip.saddr,
-        .dst_ip = inner->ip.daddr,
-        .protocol = inner->ip.protocol,
-    };
-    switch (inner->ip.protocol) {
+static inline bool_t to_flow_key(inner_headers_t *headers, __u32 data_end,
+                                 struct flow_key *key) {
+    encap_headers_t *encap_headers = (encap_headers_t *)(headers);
+    if (data_end < (__u64)headers + sizeof(inner_headers_t)) {
+        return false;
+    }
+    key->src_ip = headers->ip.saddr;
+    key->dst_ip = headers->ip.daddr;
+    key->protocol = headers->ip.protocol;
+    switch (headers->ip.protocol) {
         case IPPROTO_TCP:
-            key.src_port = inner->tcp.source;
-            key.dst_port = inner->tcp.dest;
+            if (data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
+                               sizeof(struct tcphdr)) {
+                return false;
+            }
+            key->src_port = encap_headers->tcp.source;
+            key->dst_port = encap_headers->tcp.dest;
             break;
         case IPPROTO_UDP:
-            key.src_port = inner->udp.source;
-            key.dst_port = inner->udp.dest;
+            if (data_end < (__u64)encap_headers + sizeof(inner_headers_t) +
+                               sizeof(struct udphdr)) {
+                return false;
+            }
+            key->src_port = encap_headers->udp.source;
+            key->dst_port = encap_headers->udp.dest;
             break;
         default:
-            // should never happen
-            key.src_port = 0;
-            key.dst_port = 0;
-            break;
+            return false;
     }
 
-    return key;
+    return true;
 }
 
 // Check if two buffers are equal
@@ -250,7 +258,11 @@ int egress_init_prog(struct __sk_buff *skb) {
 
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
-    struct flow_key key = to_flow_key((encap_headers_t *)inner);
+    struct flow_key key;
+    if (!to_flow_key(inner, skb->data_end, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
+    }
     struct filter_action action = {
         .ingress = 0,
         .egress = 1,
@@ -341,7 +353,11 @@ int egress_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
-    struct flow_key key = to_flow_key((encap_headers_t *)headers);
+    struct flow_key key;
+    if (!to_flow_key(headers, skb->data_end, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
+    }
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
         DEBUG_PRINT("Filter action not found for flow key\n");
@@ -479,7 +495,11 @@ int ingress_init_prog(struct __sk_buff *skb) {
 
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
-    struct flow_key key = to_flow_key((encap_headers_t *)headers);
+    struct flow_key key;
+    if (!to_flow_key(headers, skb->data_end, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
+    }
     struct filter_action action = {
         .ingress = 1,
         .egress = 0,
@@ -595,7 +615,11 @@ int ingress_prog(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
-    struct flow_key key = to_flow_key((encap_headers_t *)inner);
+    struct flow_key key;
+    if (!to_flow_key(inner, skb->data_end, &key)) {
+        DEBUG_PRINT("Failed to create flow key\n");
+        return TC_ACT_OK;
+    }
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
         DEBUG_PRINT("Filter action not found for flow key\n");
