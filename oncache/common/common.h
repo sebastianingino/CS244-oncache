@@ -3,9 +3,9 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/tcp.h>
 #include <linux/types.h>
 #include <linux/udp.h>
-#include <linux/tcp.h>
 
 typedef __u32 addr_t;
 typedef __u8 bool_t;
@@ -35,16 +35,23 @@ typedef struct inner_headers_t {
 } inner_headers_t;
 #pragma pack(pop)
 
-// Inner header structure (superset): Ethernet + IP + TCP/UDP
+// Encapsulated header structure: outer + inner
+// See https://datatracker.ietf.org/doc/html/rfc7348#section-5
 #pragma pack(push, 1)
 typedef struct encap_headers_t {
-    struct ethhdr eth;
-    struct iphdr ip;
-    union {
-        struct udphdr udp;
-        struct tcphdr tcp;
-    };
+    outer_headers_t outer;
+    inner_headers_t inner;
 } encap_headers_t;
 #pragma pack(pop)
+
+// Check if two buffers are equal
+static inline bool_t equal_buf(__u8 *buf1, __u8 *buf2, __u32 len) {
+    for (__u32 i = 0; i < len; i++) {
+        if (buf1[i] != buf2[i]) {
+            return false;
+        }
+    }
+    return true;
+}
 
 #endif  // ONCACHE_COMMON_H

@@ -15,7 +15,7 @@ $(BPF_OBJ): %.o: %.c  Makefile $(EXTRA_DEPS)
 	    -Wall \
 		-Wno-int-to-pointer-cast \
 	    -Werror \
-	    -O2 -emit-llvm -c -g -o ${@:.o=.ll} $<
+	    -O3 -emit-llvm -c -g -o ${@:.o=.ll} $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 all: $(BPF_OBJ)

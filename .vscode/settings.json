@@ -10,6 +10,16 @@
         "netfwd": "c",
         "types.h": "c",
         "bpf_endian.h": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "optional": "c",
+        "ratio": "c",
+        "system_error": "c",
+        "array": "c",
+        "functional": "c",
+        "regex": "c",
+        "tuple": "c",
+        "type_traits": "c",
+        "utility": "c",
+        "variant": "c"
     }
 }
