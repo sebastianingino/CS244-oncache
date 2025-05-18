@@ -79,8 +79,8 @@ static void mark(inner_headers_t *inner, __u8 marker, bool_t set) {
 
 // Convert inner headers to flow key
 // See https://datatracker.ietf.org/doc/html/rfc791#section-3.1
-static bool_t to_flow_key(inner_headers_t *headers,
-                                 struct __sk_buff *skb, struct flow_key *key) {
+static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
+                          struct flow_key *key) {
     // Check if the inner header is valid
     if (headers->eth.h_proto != bpf_htons(ETH_P_IP)) {
         return false;
