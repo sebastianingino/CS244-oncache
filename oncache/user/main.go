@@ -15,9 +15,13 @@ import (
 	"github.com/florianl/go-tc/core"
 	"github.com/mdlayher/netlink"
 	"golang.org/x/sys/unix"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/homedir"
 )
 
@@ -223,6 +227,65 @@ func add_interface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
 	return nil
 }
 
+func set_egress_rules(clientset *kubernetes.Clientset, config *rest.Config, rules []string) error {
+
+	// Get the antrea-agent pods
+	pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), metav1.ListOptions{
+		FieldSelector: "status.phase=Running",
+		LabelSelector: "app=antrea,component=antrea-agent",
+	})
+	if err != nil {
+		return fmt.Errorf("could not list pods: %v", err)
+	}
+	if len(pods.Items) == 0 {
+		return fmt.Errorf("no antrea-agent pods found")
+	}
+
+	// Command
+	// See: https://www.openvswitch.org/support/dist-docs/ovs-ofctl.8.html
+	// And: https://antrea.io/docs/main/docs/design/ovs-pipeline/
+	cmd := []string{"ovs-ofctl", "mod-flows", "br-int"}
+
+	for _, pod := range pods.Items {
+		for _, rule := range rules {
+			req := clientset.CoreV1().RESTClient().Post().Resource("pods").
+				Name(pod.Name).
+				Namespace("kube-system").
+				SubResource("exec")
+			req.VersionedParams(
+				&v1.PodExecOptions{
+					Command:   append(cmd, rule),
+					Container: "antrea-agent",
+					Stderr:    true,
+					Stdout:    true,
+					Stdin:     false,
+					TTY:       false,
+				},
+				scheme.ParameterCodec,
+			)
+			exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+			if err != nil {
+				return fmt.Errorf("could not create executor: %v", err)
+			}
+			if err := exec.StreamWithContext(context.Background(), remotecommand.StreamOptions{
+				Stdin:  nil,
+				Stdout: os.Stdout,
+				Stderr: os.Stderr,
+				Tty:    false,
+			}); err != nil {
+				return fmt.Errorf("could not execute command: %v", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func watch(containers []string) error {
+
+	return nil
+}
+
 func run(hostname, kubeconfig, netdev, objPath *string) error {
 	// Build the Kubernetes client configuration
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
@@ -302,6 +365,25 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	if err := add_interface(coll.Maps["interface_map"], host); err != nil {
 		return fmt.Errorf("failed to add host interface to interface_map: %v", err)
 	}
+
+	// Set up the egress rules
+	rules := []string{
+		"table=ConntrackState, priority=200,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=load:0x1->NXM_OF_IP_TOS[3],load:0x1->NXM_NX_REG0[9],resubmit(,AntreaPolicyEgressRule)",
+		"table=ConntrackState, priority=190,ct_state=-new+trk,ip actions=load:0x1->NXM_OF_IP_TOS[3],resubmit(,AntreaPolicyEgressRule)",
+	}
+	if err := set_egress_rules(clientset, config, rules); err != nil {
+		return fmt.Errorf("could not set up egress rules: %v", err)
+	}
+	defer func() {
+		// Remove the egress rules
+		rules := []string{
+			"table=ConntrackState, priority=200,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=load:0x1->NXM_NX_REG0[9],resubmit(,AntreaPolicyEgressRule)",
+			"table=ConntrackState, priority=190,ct_state=-new+trk,ip actions=resubmit(,AntreaPolicyEgressRule)",
+		}
+		if err := set_egress_rules(clientset, config, rules); err != nil {
+			fmt.Fprintf(os.Stderr, "could not remove egress rules: %v\n", err)
+		}
+	}()
 
 	// Get the list of containers
 	containers, err := get_containers(clientset, hostname)
