@@ -119,6 +119,14 @@ func teardown(netdev *net.Interface) {
 }
 
 func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) error {
+	// Check if the program is a TC program
+	if prog == nil {
+		return fmt.Errorf("program is nil")
+	}
+	if prog.Type() != ebpf.SchedCLS {
+		return fmt.Errorf("program is not a TC program: %v", prog.Type())
+	}
+
 	// Check the direction
 	if direction != tc.HandleMinIngress && direction != tc.HandleMinEgress {
 		return fmt.Errorf("invalid direction: %v", direction)
@@ -137,14 +145,14 @@ func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) e
 
 	// Attach the eBPF program to the network device
 	fd := uint32(prog.FD())
-	flags := uint32(unix.BPF_F_REPLACE)
+	flags := uint32(0)
 
 	filter := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
 			Ifindex: uint32(netdev.Index),
 			Handle:  0,
-			Parent:  direction,
+			Parent:  core.BuildHandle(tc.HandleRoot, direction),
 			Info:    0x300,
 		},
 		Attribute: tc.Attribute{
@@ -158,6 +166,83 @@ func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) e
 
 	if err := tcnl.Filter().Add(&filter); err != nil {
 		return fmt.Errorf("could not add filter: %v", err)
+	}
+
+	return nil
+}
+
+func run(hostname, kubeconfig, netdev *string) error {
+	// Build the Kubernetes client configuration
+	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	if err != nil {
+		return fmt.Errorf("could not build kubeconfig: %v", err)
+	}
+
+	// Create the Kubernetes clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("could not create Kubernetes clientset: %v", err)
+	}
+
+	// Get the network device ID
+	host, err := net.InterfaceByName(*netdev)
+	if err != nil {
+		return fmt.Errorf("could not get network device ID: %v", err)
+	}
+
+	// Run setup
+	if err := setup(host); err != nil {
+		return fmt.Errorf("could not set up: %v", err)
+	}
+	defer teardown(host)
+
+	// Load the eBPF collection spec
+	spec, err := ebpf.LoadCollectionSpec("../kernel/ebpf_plugin.o")
+	if err != nil {
+		return fmt.Errorf("could not load eBPF collection spec: %v", err)
+	}
+
+	// Make directory for pinned maps
+	os.MkdirAll("/sys/fs/bpf/tc/globals", 0755)
+	defer os.RemoveAll("/sys/fs/bpf/tc/globals")
+
+	// Load the eBPF collection
+	coll, err := ebpf.NewCollectionWithOptions(spec, ebpf.CollectionOptions{
+		Maps: ebpf.MapOptions{
+			// Pin the maps to the filesystem
+			PinPath: "/sys/fs/bpf/tc/globals",
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("could not create eBPF collection: %v", err)
+	}
+	defer coll.Close()
+
+	// Print the loaded maps
+	fmt.Printf("Found %d maps:\n", len(coll.Maps))
+	for name := range coll.Maps {
+		fmt.Printf("Loaded map: %s\n", name)
+	}
+
+	// Print the loaded programs
+	fmt.Printf("Found %d programs:\n", len(coll.Programs))
+	for name := range coll.Programs {
+		fmt.Printf("Loaded program: %s\n", name)
+	}
+
+	// Load the egress init program
+	if err := load_program(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
+		return fmt.Errorf("could not load egress init program: %v", err)
+	}
+
+	// Get the list of containers
+	containers, err := get_containers(clientset, hostname)
+	if err != nil {
+		return fmt.Errorf("could not get containers: %v", err)
+	}
+	// Print the list of containers
+	for _, container := range containers {
+		fmt.Println(container)
 	}
 
 	return nil
@@ -186,63 +271,8 @@ func main() {
 	// Parse the flags
 	flag.Parse()
 
-	// Build the Kubernetes client configuration
-	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not build kubeconfig: %v\n", err)
+	if err := run(hostname, kubeconfig, netdev); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
-	}
-
-	// Create the Kubernetes clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not create Kubernetes clientset: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get the network device ID
-	host, err := net.InterfaceByName(*netdev)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not get network device ID: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Run setup
-	if err := setup(host); err != nil {
-		fmt.Fprintf(os.Stderr, "could not set up: %v\n", err)
-		os.Exit(1)
-	}
-	defer teardown(host)
-
-	// Load the eBPF collection spec
-	spec, err := ebpf.LoadCollectionSpec("../kernel/ebpf_plugin.o")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not load eBPF collection spec: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Load the eBPF collection
-	coll, err := ebpf.NewCollection(spec)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not create eBPF collection: %v\n", err)
-		os.Exit(1)
-	}
-	defer coll.Close()
-
-	// Load the egress init program
-	if err := load_program(coll.Programs["egress_init_prog"], tc.HandleMinEgress, host); err != nil {
-		fmt.Fprintf(os.Stderr, "could not load egress program: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get the list of containers
-	containers, err := get_containers(clientset, hostname)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not get containers: %v\n", err)
-		os.Exit(1)
-	}
-	// Print the list of containers
-	for _, container := range containers {
-		fmt.Println(container)
 	}
 }

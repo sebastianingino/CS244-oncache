@@ -79,8 +79,8 @@ struct {
 
 // Egress init hook
 // Attached to outgoing packets, host interface
-SEC("egress_init")
-int egress_init_prog(struct __sk_buff *skb) {
+SEC("tc/egress_init")
+int egress_init(struct __sk_buff *skb) {
     DEBUG_PRINT("egress called\n");
 
     /** BEGIN: Packet Validation */
@@ -189,8 +189,8 @@ int egress_init_prog(struct __sk_buff *skb) {
 
 // Egress hook (called before egress_init)
 // Attached to outgoing packets, host veth interface
-SEC("egress")
-int egress_prog(struct __sk_buff *skb) {
+SEC("tc/egress")
+int egress(struct __sk_buff *skb) {
     DEBUG_PRINT("egress called\n");
 
     /** BEGIN: Packet Validation */
@@ -317,8 +317,8 @@ int egress_prog(struct __sk_buff *skb) {
 
 // Ingress init hook
 // Attached to incoming packets, container veth interface
-SEC("ingress_init")
-int ingress_init_prog(struct __sk_buff *skb) {
+SEC("tc/ingress_init")
+int ingress_init(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress_init called\n");
 
     /** BEGIN: Packet Validation */
@@ -399,8 +399,8 @@ int ingress_init_prog(struct __sk_buff *skb) {
 
 // Ingress hook (called before ingress_init)
 // Attached to incoming packets, host interface
-SEC("ingress")
-int ingress_prog(struct __sk_buff *skb) {
+SEC("tc/ingress")
+int ingress(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress called\n");
 
     /** BEGIN: Packet Validation */
