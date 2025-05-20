@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
@@ -21,6 +22,7 @@ import (
 )
 
 const DEFAULT_NETDEV = "ens4"
+const DEFAULT_OBJ_PATH = "../kernel/ebpf_plugin.o"
 
 func setup(netdev *net.Interface) error {
 	// Remove rlimit
@@ -171,7 +173,7 @@ func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) e
 	return nil
 }
 
-func run(hostname, kubeconfig, netdev *string) error {
+func run(hostname, kubeconfig, netdev, objPath *string) error {
 	// Build the Kubernetes client configuration
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
@@ -197,7 +199,7 @@ func run(hostname, kubeconfig, netdev *string) error {
 	defer teardown(host)
 
 	// Load the eBPF collection spec
-	spec, err := ebpf.LoadCollectionSpec("../kernel/ebpf_plugin.o")
+	spec, err := ebpf.LoadCollectionSpec(*objPath)
 	if err != nil {
 		return fmt.Errorf("could not load eBPF collection spec: %v", err)
 	}
@@ -230,9 +232,14 @@ func run(hostname, kubeconfig, netdev *string) error {
 		fmt.Printf("%s\n", name)
 	}
 
-	// Load the egress init program
+	// Load the egress init program on the hsot
 	if err := load_program(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
 		return fmt.Errorf("could not load egress init program: %v", err)
+	}
+
+	// Load the ingress program on the host
+	if err := load_program(coll.Programs["ingress"], tc.HandleMinIngress, host); err != nil {
+		return fmt.Errorf("could not load ingress program: %v", err)
 	}
 
 	// Get the list of containers
@@ -244,6 +251,9 @@ func run(hostname, kubeconfig, netdev *string) error {
 	for _, container := range containers {
 		fmt.Println(container)
 	}
+
+	// Wait for 5 seconds
+	time.Sleep(5 * time.Second)
 
 	return nil
 }
@@ -268,10 +278,13 @@ func main() {
 	// Set up the network device flag
 	var netdev = flag.String("netdev", DEFAULT_NETDEV, "(optional) network device to use")
 
+	// Set up the object path flag
+	var objPath = flag.String("objpath", DEFAULT_OBJ_PATH, "(optional) path to the eBPF object file")
+
 	// Parse the flags
 	flag.Parse()
 
-	if err := run(hostname, kubeconfig, netdev); err != nil {
+	if err := run(hostname, kubeconfig, netdev, objPath); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
