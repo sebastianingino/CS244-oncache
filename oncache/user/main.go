@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/rlimit"
 	"github.com/florianl/go-tc"
 	"github.com/florianl/go-tc/core"
 	"github.com/mdlayher/netlink"
@@ -20,7 +22,50 @@ import (
 
 const DEFAULT_NETDEV = "ens4"
 
-func setup(clientset *kubernetes.Clientset, hostname *string, netdev *string) ([]string, error) {
+func setup(devID *net.Interface) error {
+	// Remove rlimit
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("could not remove rlimit: %v", err)
+	}
+
+	// open a rtnetlink socket
+	tcnl, err := tc.Open(&tc.Config{})
+	if err != nil {
+		return fmt.Errorf("could not open rtnetlink socket: %v", err)
+	}
+	defer func() {
+		if err := tcnl.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
+		}
+	}()
+
+	// For enhanced error messages from the kernel, it is recommended to set
+	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
+	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
+		return fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
+	}
+
+	// Create qdisc on host
+	qdisc := tc.Object{
+		Msg: tc.Msg{
+			Family:  unix.AF_UNSPEC,
+			Ifindex: uint32(devID.Index),
+			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
+			Parent:  0,
+			Info:    0,
+		},
+		Attribute: tc.Attribute{
+			Kind: "clsact",
+		},
+	}
+	if err := tcnl.Qdisc().Add(&qdisc); err != nil {
+		return fmt.Errorf("could not add qdisc: %v", err)
+	}
+
+	return nil
+}
+
+func get_containers(clientset *kubernetes.Clientset, hostname *string) ([]string, error) {
 	// Get all running pods on current node
 	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s,status.phase=Running", *hostname),
@@ -39,57 +84,10 @@ func setup(clientset *kubernetes.Clientset, hostname *string, netdev *string) ([
 		}
 	}
 
-	// Get the network device ID
-	devID, err := net.InterfaceByName(*netdev)
-	if err != nil {
-		return nil, fmt.Errorf("could not get network device ID: %v", err)
-	}
-
-	// open a rtnetlink socket
-	tcnl, err := tc.Open(&tc.Config{})
-	if err != nil {
-		return nil, fmt.Errorf("could not open rtnetlink socket: %v", err)
-	}
-	defer func() {
-		if err := tcnl.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
-		}
-	}()
-
-	// For enhanced error messages from the kernel, it is recommended to set
-	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
-	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
-		return nil, fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
-	}
-
-	// Create qdisc on host
-	qdisc := tc.Object{
-		Msg: tc.Msg{
-			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(devID.Index),
-			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
-			Parent:  tc.HandleIngress,
-			Info:    0,
-		},
-		Attribute: tc.Attribute{
-			Kind: "clsact",
-		},
-	}
-	if err := tcnl.Qdisc().Add(&qdisc); err != nil {
-		return nil, fmt.Errorf("could not add qdisc: %v", err)
-	}
-
 	return containers, nil
 }
 
-func teardown(netdev *string) {
-	// Get the network device ID
-	devID, err := net.InterfaceByName(*netdev)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not get network device ID: %v\n", err)
-		return
-	}
-
+func teardown(devID *net.Interface) {
 	// open a rtnetlink socket
 	tcnl, err := tc.Open(&tc.Config{})
 	if err != nil {
@@ -108,7 +106,7 @@ func teardown(netdev *string) {
 			Family:  unix.AF_UNSPEC,
 			Ifindex: uint32(devID.Index),
 			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
-			Parent:  tc.HandleIngress,
+			Parent:  0,
 			Info:    0,
 		},
 		Attribute: tc.Attribute{
@@ -120,8 +118,54 @@ func teardown(netdev *string) {
 	}
 }
 
-func load_program() {
+func load_program(spec *ebpf.ProgramSpec, direction uint32, devID *net.Interface) error {
+	// Load the eBPF program
+	prog, err := ebpf.NewProgram(spec)
+	if err != nil {
+		return fmt.Errorf("could not load eBPF program: %v", err)
+	}
 
+	if direction != tc.HandleMinIngress && direction != tc.HandleMinEgress {
+		return fmt.Errorf("invalid direction: %v", direction)
+	}
+
+	// open a rtnetlink socket
+	tcnl, err := tc.Open(&tc.Config{})
+	if err != nil {
+		return fmt.Errorf("could not open rtnetlink socket: %v", err)
+	}
+	defer func() {
+		if err := tcnl.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
+		}
+	}()
+
+	// Attach the eBPF program to the network device
+	fd := uint32(prog.FD())
+	flags := uint32(unix.BPF_F_REPLACE)
+
+	filter := tc.Object{
+		Msg: tc.Msg{
+			Family:  unix.AF_UNSPEC,
+			Ifindex: uint32(devID.Index),
+			Handle:  0,
+			Parent:  direction,
+			Info:    0x300,
+		},
+		Attribute: tc.Attribute{
+			Kind: "bpf",
+			BPF: &tc.Bpf{
+				FD:    &fd,
+				Flags: &flags,
+			},
+		},
+	}
+
+	if err := tcnl.Filter().Add(&filter); err != nil {
+		return fmt.Errorf("could not add filter: %v", err)
+	}
+
+	return nil
 }
 
 func main() {
@@ -161,14 +205,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Run setup and get the list of containers
-	containers, err := setup(clientset, hostname, netdev)
-	defer teardown(netdev)
+	// Get the network device ID
+	devID, err := net.InterfaceByName(*netdev)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not set up: %v\n", err)
+		fmt.Fprintf(os.Stderr, "could not get network device ID: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Run setup
+	if err := setup(devID); err != nil {
+		fmt.Fprintf(os.Stderr, "could not set up: %v\n", err)
+		os.Exit(1)
+	}
+	defer teardown(devID)
+
+	// Load the eBPF program
+	spec, err := ebpf.LoadCollectionSpec("../kernel/ebpf_plugin.o")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not load eBPF collection spec: %v\n", err)
+		os.Exit(1)
+	}
+	// Print programs
+	for name, _ := range spec.Programs {
+		fmt.Printf("Program name: %s\n", name)
+	}
+
+	if err := load_program(spec.Programs["egress_init"], tc.HandleMinEgress, devID); err != nil {
+		fmt.Fprintf(os.Stderr, "could not load egress program: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get the list of containers
+	containers, err := get_containers(clientset, hostname)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not get containers: %v\n", err)
+		os.Exit(1)
+	}
+	// Print the list of containers
 	for _, container := range containers {
 		fmt.Println(container)
 	}

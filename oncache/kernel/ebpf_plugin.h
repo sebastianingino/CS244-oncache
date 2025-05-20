@@ -3,12 +3,47 @@
 
 #include <linux/types.h>
 // ^ must come first
+
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
+#include <linux/if_ether.h>
+#include <linux/in.h>
+#include <linux/ip.h>
+#include <linux/tcp.h>
+#include <linux/udp.h>
 
-#include "common/common.h"
+typedef __u32 addr_t;
+typedef __u8 bool_t;
+#define true 1
+#define false 0
+
+// See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+#define VXLAN_HEADER_LEN 8
+
+// Outer header structure: Ethernet + IP + UDP + VXLAN
+// See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+typedef struct outer_headers_t {
+    struct ethhdr eth;
+    struct iphdr ip;
+    struct udphdr udp;
+    __u8 vxlan[VXLAN_HEADER_LEN];
+} __attribute__((packed)) outer_headers_t;
+
+// Inner header structure: Ethernet + IP
+// See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+typedef struct inner_headers_t {
+    struct ethhdr eth;
+    struct iphdr ip;
+} __attribute__((packed)) inner_headers_t;
+
+// Encapsulated header structure: outer + inner
+// See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+typedef struct encap_headers_t {
+    outer_headers_t outer;
+    inner_headers_t inner;
+} __attribute__((packed)) encap_headers_t;
 
 // Egress cache L2: host destination IP -> (outer headers, inner MAC header,
 // host interface index)
@@ -115,6 +150,16 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
             return false;
     }
 
+    return true;
+}
+
+// Check if two buffers are equal
+static inline bool_t equal_buf(__u8 *buf1, __u8 *buf2, __u32 len) {
+    for (__u32 i = 0; i < len; i++) {
+        if (buf1[i] != buf2[i]) {
+            return false;
+        }
+    }
     return true;
 }
 
