@@ -22,7 +22,7 @@ import (
 
 const DEFAULT_NETDEV = "ens4"
 
-func setup(devID *net.Interface) error {
+func setup(netdev *net.Interface) error {
 	// Remove rlimit
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("could not remove rlimit: %v", err)
@@ -49,9 +49,9 @@ func setup(devID *net.Interface) error {
 	qdisc := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(devID.Index),
+			Ifindex: uint32(netdev.Index),
 			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
-			Parent:  0,
+			Parent:  tc.HandleIngress,
 			Info:    0,
 		},
 		Attribute: tc.Attribute{
@@ -87,7 +87,7 @@ func get_containers(clientset *kubernetes.Clientset, hostname *string) ([]string
 	return containers, nil
 }
 
-func teardown(devID *net.Interface) {
+func teardown(netdev *net.Interface) {
 	// open a rtnetlink socket
 	tcnl, err := tc.Open(&tc.Config{})
 	if err != nil {
@@ -104,9 +104,9 @@ func teardown(devID *net.Interface) {
 	qdisc := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(devID.Index),
+			Ifindex: uint32(netdev.Index),
 			Handle:  core.BuildHandle(tc.HandleRoot, 0x0000),
-			Parent:  0,
+			Parent:  tc.HandleIngress,
 			Info:    0,
 		},
 		Attribute: tc.Attribute{
@@ -118,13 +118,8 @@ func teardown(devID *net.Interface) {
 	}
 }
 
-func load_program(spec *ebpf.ProgramSpec, direction uint32, devID *net.Interface) error {
-	// Load the eBPF program
-	prog, err := ebpf.NewProgram(spec)
-	if err != nil {
-		return fmt.Errorf("could not load eBPF program: %v", err)
-	}
-
+func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) error {
+	// Check the direction
 	if direction != tc.HandleMinIngress && direction != tc.HandleMinEgress {
 		return fmt.Errorf("invalid direction: %v", direction)
 	}
@@ -147,7 +142,7 @@ func load_program(spec *ebpf.ProgramSpec, direction uint32, devID *net.Interface
 	filter := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
-			Ifindex: uint32(devID.Index),
+			Ifindex: uint32(netdev.Index),
 			Handle:  0,
 			Parent:  direction,
 			Info:    0x300,
@@ -206,31 +201,36 @@ func main() {
 	}
 
 	// Get the network device ID
-	devID, err := net.InterfaceByName(*netdev)
+	host, err := net.InterfaceByName(*netdev)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "could not get network device ID: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Run setup
-	if err := setup(devID); err != nil {
+	if err := setup(host); err != nil {
 		fmt.Fprintf(os.Stderr, "could not set up: %v\n", err)
 		os.Exit(1)
 	}
-	defer teardown(devID)
+	defer teardown(host)
 
-	// Load the eBPF program
+	// Load the eBPF collection spec
 	spec, err := ebpf.LoadCollectionSpec("../kernel/ebpf_plugin.o")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "could not load eBPF collection spec: %v\n", err)
 		os.Exit(1)
 	}
-	// Print programs
-	for name, _ := range spec.Programs {
-		fmt.Printf("Program name: %s\n", name)
-	}
 
-	if err := load_program(spec.Programs["egress_init"], tc.HandleMinEgress, devID); err != nil {
+	// Load the eBPF collection
+	coll, err := ebpf.NewCollection(spec)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "could not create eBPF collection: %v\n", err)
+		os.Exit(1)
+	}
+	defer coll.Close()
+
+	// Load the egress init program
+	if err := load_program(coll.Programs["egress_init_prog"], tc.HandleMinEgress, host); err != nil {
 		fmt.Fprintf(os.Stderr, "could not load egress program: %v\n", err)
 		os.Exit(1)
 	}
