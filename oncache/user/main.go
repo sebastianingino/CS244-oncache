@@ -7,50 +7,35 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/florianl/go-tc"
 	"github.com/florianl/go-tc/core"
 	"github.com/mdlayher/netlink"
 	"golang.org/x/sys/unix"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/homedir"
+	criV1 "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
 const DEFAULT_NETDEV = "ens4"
 const DEFAULT_OBJ_PATH = "../kernel/ebpf_plugin.o"
 
-func setup(netdev *net.Interface) error {
-	// Remove rlimit
-	if err := rlimit.RemoveMemlock(); err != nil {
-		return fmt.Errorf("could not remove rlimit: %v", err)
-	}
-
-	// open a rtnetlink socket
-	tcnl, err := tc.Open(&tc.Config{})
-	if err != nil {
-		return fmt.Errorf("could not open rtnetlink socket: %v", err)
-	}
-	defer func() {
-		if err := tcnl.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
-		}
-	}()
-
-	// For enhanced error messages from the kernel, it is recommended to set
-	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
-	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
-		return fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
-	}
-
+func createQdisc(netdev *net.Interface, tcnl *tc.Tc) error {
 	// Create qdisc on host
 	qdisc := tc.Object{
 		Msg: tc.Msg{
@@ -71,41 +56,7 @@ func setup(netdev *net.Interface) error {
 	return nil
 }
 
-func get_containers(clientset *kubernetes.Clientset, hostname *string) ([]string, error) {
-	// Get all running pods on current node
-	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("spec.nodeName=%s,status.phase=Running", *hostname),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("could not list pods: %v", err)
-	}
-
-	// Get all running containers in the pods
-	containers := make([]string, 0)
-	for _, pod := range pods.Items {
-		for _, container := range pod.Status.ContainerStatuses {
-			if container.State.Running != nil {
-				containers = append(containers, container.ContainerID)
-			}
-		}
-	}
-
-	return containers, nil
-}
-
-func teardown(netdev *net.Interface) {
-	// open a rtnetlink socket
-	tcnl, err := tc.Open(&tc.Config{})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "could not open rtnetlink socket: %v\n", err)
-		return
-	}
-	defer func() {
-		if err := tcnl.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
-		}
-	}()
-
+func deleteQdisc(netdev *net.Interface, tcnl *tc.Tc) error {
 	// Delete qdisc on host
 	qdisc := tc.Object{
 		Msg: tc.Msg{
@@ -120,11 +71,35 @@ func teardown(netdev *net.Interface) {
 		},
 	}
 	if err := tcnl.Qdisc().Delete(&qdisc); err != nil {
-		fmt.Fprintf(os.Stderr, "could not delete qdisc: %v\n", err)
+		return fmt.Errorf("could not delete qdisc: %v", err)
 	}
+
+	return nil
 }
 
-func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) error {
+func getContainers(clientset *kubernetes.Clientset, hostname *string) (mapset.Set[string], error) {
+	// Get all running pods on current node
+	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s,status.phase=Running", *hostname),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not list pods: %v", err)
+	}
+
+	// Get all running containers in the pods
+	containers := mapset.NewSet[string]()
+	for _, pod := range pods.Items {
+		for _, container := range pod.Status.ContainerStatuses {
+			if container.State.Running != nil {
+				containers.Add(container.ContainerID)
+			}
+		}
+	}
+
+	return containers, nil
+}
+
+func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) error {
 	// Check if the program is a TC program
 	if prog == nil {
 		return fmt.Errorf("program is nil")
@@ -177,7 +152,7 @@ func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) e
 	return nil
 }
 
-func add_interface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
+func addInterface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
 	// Check if map exists
 	if interfaceMap == nil {
 		return fmt.Errorf("map or spec is nil")
@@ -227,7 +202,7 @@ func add_interface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
 	return nil
 }
 
-func set_egress_rules(clientset *kubernetes.Clientset, config *rest.Config, rules []string) error {
+func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules []string) error {
 
 	// Get the antrea-agent pods
 	pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), metav1.ListOptions{
@@ -281,7 +256,98 @@ func set_egress_rules(clientset *kubernetes.Clientset, config *rest.Config, rule
 	return nil
 }
 
-func watch(containers []string) error {
+func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
+	fmt.Printf("Initializing container %v on pod %s\n", container, pod.Name)
+	status, err := criClient.ContainerStatus(context.Background(), &criV1.ContainerStatusRequest{
+		ContainerId: container.ContainerID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get container info: %v", err)
+	}
+	fmt.Printf("%v\n", status)
+	return nil
+}
+
+func retireContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
+	fmt.Printf("Retiring container %v on pod %s\n", container, pod.Name)
+	return nil
+}
+
+func watchContainers(containers mapset.Set[string], clientset *kubernetes.Clientset, hostname *string) error {
+	fmt.Println("Watching for new containers...")
+
+	// Connect to the CRI runtime
+	conn, err := grpc.NewClient("unix:///run/containerd/containerd.sock", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// Create a new CRI runtime client
+	criClient := criV1.NewRuntimeServiceClient(conn)
+
+	// Watch for new containers
+	watcher, err := clientset.CoreV1().Pods("").Watch(context.Background(), metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", *hostname),
+	})
+	if err != nil {
+		return fmt.Errorf("could not watch pods: %v", err)
+	}
+
+	// Catch SIGINT signal to stop the watcher
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stop
+		watcher.Stop()
+		fmt.Println("Stopping watcher...")
+	}()
+	defer watcher.Stop()
+
+	fmt.Println("Press Ctrl+C to quit.")
+
+	for event := range watcher.ResultChan() {
+		switch event.Type {
+		case watch.Added, watch.Modified:
+			pod, ok := event.Object.(*v1.Pod)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "could not cast event object to pod: %v", event.Object)
+				continue
+			}
+			if pod.Status.Phase == v1.PodRunning {
+				for _, container := range pod.Status.ContainerStatuses {
+					if container.State.Running != nil && !containers.Contains(container.ContainerID) {
+						// Initialize container
+						if err := initContainer(pod, container, criClient); err != nil {
+							fmt.Fprintf(os.Stderr, "could not initialize container: %v", err)
+							continue
+						}
+						// Add container to set
+						containers.Add(container.ContainerID)
+					}
+				}
+			}
+		case watch.Deleted:
+			pod, ok := event.Object.(*v1.Pod)
+			if !ok {
+				fmt.Fprintf(os.Stderr, "could not cast event object to pod: %v", event.Object)
+				continue
+			}
+			if pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
+				for _, container := range pod.Status.ContainerStatuses {
+					if container.State.Terminated != nil && containers.Contains(container.ContainerID) {
+						// Retire container
+						if err := retireContainer(pod, container, criClient); err != nil {
+							fmt.Fprintf(os.Stderr, "could not retire container: %v", err)
+							continue
+						}
+						// Remove container from set
+						containers.Remove(container.ContainerID)
+					}
+				}
+			}
+		}
+	}
 
 	return nil
 }
@@ -305,11 +371,37 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		return fmt.Errorf("could not get network device ID: %v", err)
 	}
 
-	// Run setup
-	if err := setup(host); err != nil {
-		return fmt.Errorf("could not set up: %v", err)
+	// Remove rlimit
+	if err := rlimit.RemoveMemlock(); err != nil {
+		return fmt.Errorf("could not remove rlimit: %v", err)
 	}
-	defer teardown(host)
+
+	// open a rtnetlink socket
+	tcnl, err := tc.Open(&tc.Config{})
+	if err != nil {
+		return fmt.Errorf("could not open rtnetlink socket: %v", err)
+	}
+	defer func() {
+		if err := tcnl.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
+		}
+	}()
+
+	// For enhanced error messages from the kernel, it is recommended to set
+	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
+	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
+		return fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
+	}
+
+	// Create qdisc on host
+	if err := createQdisc(host, tcnl); err != nil {
+		return fmt.Errorf("could not create host qdisc: %v", err)
+	}
+	defer func() {
+		if err := deleteQdisc(host, tcnl); err != nil {
+			fmt.Fprintf(os.Stderr, "could not delete host qdisc: %v\n", err)
+		}
+	}()
 
 	// Load the eBPF collection spec
 	spec, err := ebpf.LoadCollectionSpec(*objPath)
@@ -352,17 +444,17 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 
 	// Load the egress init program on the hsot
-	if err := load_program(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
+	if err := loadProgram(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
 		return fmt.Errorf("could not load egress init program: %v", err)
 	}
 
 	// Load the ingress program on the host
-	if err := load_program(coll.Programs["ingress"], tc.HandleMinIngress, host); err != nil {
+	if err := loadProgram(coll.Programs["ingress"], tc.HandleMinIngress, host); err != nil {
 		return fmt.Errorf("could not load ingress program: %v", err)
 	}
 
 	// Populate interface_map with host information
-	if err := add_interface(coll.Maps["interface_map"], host); err != nil {
+	if err := addInterface(coll.Maps["interface_map"], host); err != nil {
 		return fmt.Errorf("failed to add host interface to interface_map: %v", err)
 	}
 
@@ -371,7 +463,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		"table=ConntrackState, priority=200,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=load:0x1->NXM_OF_IP_TOS[3],load:0x1->NXM_NX_REG0[9],resubmit(,AntreaPolicyEgressRule)",
 		"table=ConntrackState, priority=190,ct_state=-new+trk,ip actions=load:0x1->NXM_OF_IP_TOS[3],resubmit(,AntreaPolicyEgressRule)",
 	}
-	if err := set_egress_rules(clientset, config, rules); err != nil {
+	if err := setEgressRules(clientset, config, rules); err != nil {
 		return fmt.Errorf("could not set up egress rules: %v", err)
 	}
 	defer func() {
@@ -380,19 +472,23 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 			"table=ConntrackState, priority=200,ct_state=-new+trk,ct_mark=0x10/0x10,ip actions=load:0x1->NXM_NX_REG0[9],resubmit(,AntreaPolicyEgressRule)",
 			"table=ConntrackState, priority=190,ct_state=-new+trk,ip actions=resubmit(,AntreaPolicyEgressRule)",
 		}
-		if err := set_egress_rules(clientset, config, rules); err != nil {
+		if err := setEgressRules(clientset, config, rules); err != nil {
 			fmt.Fprintf(os.Stderr, "could not remove egress rules: %v\n", err)
 		}
 	}()
 
 	// Get the list of containers
-	containers, err := get_containers(clientset, hostname)
+	containers, err := getContainers(clientset, hostname)
 	if err != nil {
 		return fmt.Errorf("could not get containers: %v", err)
 	}
-	// Print the list of containers
-	for _, container := range containers {
-		fmt.Println(container)
+	for _, container := range containers.ToSlice() {
+		fmt.Printf("Found container: %v\n", container)
+	}
+
+	// Watch for new containers
+	if err := watchContainers(containers, clientset, hostname); err != nil {
+		return fmt.Errorf("could not watch containers: %v", err)
 	}
 
 	return nil
