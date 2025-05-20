@@ -3,7 +3,7 @@ module oncache-cs244/user
 go 1.24.3
 
 require (
-	github.com/cilium/ebpf v0.8.1
+	github.com/cilium/ebpf v0.18.0
 	github.com/florianl/go-tc v0.4.5
 	github.com/mdlayher/netlink v1.7.2
 	golang.org/x/sys v0.31.0

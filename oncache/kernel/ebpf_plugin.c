@@ -81,7 +81,7 @@ struct {
 // Attached to outgoing packets, host interface
 SEC("tc/egress_init")
 int egress_init(struct __sk_buff *skb) {
-    DEBUG_PRINT("egress called\n");
+    DEBUG_PRINT("egress_init called\n");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is long enough

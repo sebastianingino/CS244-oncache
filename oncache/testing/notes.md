@@ -74,3 +74,11 @@ To remove the filter, we can use the following command:
 ```bash
 sudo tc filter del dev dummy0 egress
 ```
+
+### Logs
+
+You can read the log pipe with the following command:
+
+```bash
+sudo cat  /sys/kernel/debug/tracing/trace_pipe
+```

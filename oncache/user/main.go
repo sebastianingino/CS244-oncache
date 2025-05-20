@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
@@ -173,6 +173,56 @@ func load_program(prog *ebpf.Program, direction uint32, netdev *net.Interface) e
 	return nil
 }
 
+func add_interface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
+	// Check if map exists
+	if interfaceMap == nil {
+		return fmt.Errorf("map or spec is nil")
+	}
+
+	// Map value struct
+	type InterfaceData struct {
+		Mac [6]byte
+		Ip  uint32
+	}
+
+	// Get key
+	interface_index := uint32(netdev.Index)
+
+	// Get values for struct
+	if len(netdev.HardwareAddr) != 6 {
+		return fmt.Errorf("failed getting hardware addr, got %v", netdev.HardwareAddr)
+	}
+
+	ips, err := netdev.Addrs()
+	if err != nil {
+		return fmt.Errorf("failed to get network interface address: %v", err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("found no network interface addresses")
+	}
+	ip, _, err := net.ParseCIDR(ips[0].String())
+	if err != nil {
+		return fmt.Errorf("failed to convert IP: %v", err)
+	}
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return fmt.Errorf("failed to convert IP %v to v4", ip)
+	}
+
+	// Populate struct
+	value := InterfaceData{
+		Mac: [6]byte(netdev.HardwareAddr),
+		Ip:  binary.BigEndian.Uint32(ipv4),
+	}
+
+	// Add to interface map
+	if err := interfaceMap.Put(interface_index, value); err != nil {
+		return fmt.Errorf("failed adding value to map: %v", err)
+	}
+
+	return nil
+}
+
 func run(hostname, kubeconfig, netdev, objPath *string) error {
 	// Build the Kubernetes client configuration
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
@@ -205,8 +255,14 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 
 	// Make directory for pinned maps
-	os.MkdirAll("/sys/fs/bpf/tc/globals", 0755)
-	defer os.RemoveAll("/sys/fs/bpf/tc/globals")
+	if err := os.MkdirAll("/sys/fs/bpf/tc/globals", 0755); err != nil {
+		return fmt.Errorf("could not create directory for pinned maps: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll("/sys/fs/bpf/tc/globals"); err != nil {
+			fmt.Fprintf(os.Stderr, "could not remove directory for pinned maps: %v\n", err)
+		}
+	}()
 
 	// Load the eBPF collection
 	coll, err := ebpf.NewCollectionWithOptions(spec, ebpf.CollectionOptions{
@@ -242,6 +298,11 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		return fmt.Errorf("could not load ingress program: %v", err)
 	}
 
+	// Populate interface_map with host information
+	if err := add_interface(coll.Maps["interface_map"], host); err != nil {
+		return fmt.Errorf("failed to add host interface to interface_map: %v", err)
+	}
+
 	// Get the list of containers
 	containers, err := get_containers(clientset, hostname)
 	if err != nil {
@@ -251,9 +312,6 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	for _, container := range containers {
 		fmt.Println(container)
 	}
-
-	// Wait for 5 seconds
-	time.Sleep(5 * time.Second)
 
 	return nil
 }

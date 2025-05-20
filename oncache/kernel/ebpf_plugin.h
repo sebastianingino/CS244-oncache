@@ -79,7 +79,7 @@ struct filter_action {
 struct interface_data {
     __u8 mac[ETH_ALEN];
     addr_t ip;
-};
+} __attribute__((packed));
 
 // Check if UDP port is VXLAN
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-8
