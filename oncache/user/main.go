@@ -221,13 +221,13 @@ func run(hostname, kubeconfig, netdev *string) error {
 	// Print the loaded maps
 	fmt.Printf("Found %d maps:\n", len(coll.Maps))
 	for name := range coll.Maps {
-		fmt.Printf("Loaded map: %s\n", name)
+		fmt.Printf("%s\n", name)
 	}
 
 	// Print the loaded programs
 	fmt.Printf("Found %d programs:\n", len(coll.Programs))
 	for name := range coll.Programs {
-		fmt.Printf("Loaded program: %s\n", name)
+		fmt.Printf("%s\n", name)
 	}
 
 	// Load the egress init program
