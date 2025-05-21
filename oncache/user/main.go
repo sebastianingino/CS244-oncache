@@ -194,6 +194,8 @@ func setInterface(hostInterface *ebpf.Variable, netdev *net.Interface) error {
 		return fmt.Errorf("failed adding value to map: %v", err)
 	}
 
+	slog.Debug("added network interface", slog.Any("interface", value))
+
 	return nil
 }
 
@@ -349,6 +351,8 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	if err := ingressMap.Put(binary.BigEndian.Uint32(ipv4), data); err != nil {
 		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
 	}
+
+	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.BigEndian.Uint32(ipv4)), slog.Any("value", data))
 
 	return nil
 }
