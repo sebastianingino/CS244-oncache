@@ -438,11 +438,11 @@ int ingress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     // Check if the packet matches the interface data
-    if (!equal_buf(interface_data->mac, headers->inner.eth.h_dest, ETH_ALEN)) {
+    if (!equal_buf(interface_data->mac, headers->outer.eth.h_dest, ETH_ALEN)) {
         DEBUG_PRINT("Packet does not match interface eth address\n");
         return TC_ACT_OK;
     }
-    if (interface_data->ip != headers->inner.ip.daddr) {
+    if (interface_data->ip != headers->outer.ip.daddr) {
         DEBUG_PRINT("Packet does not match interface IP address\n");
         return TC_ACT_OK;
     }

@@ -5,10 +5,12 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -120,7 +122,7 @@ func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) er
 	}
 	defer func() {
 		if err := tcnl.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
+			slog.Error("could not close rtnetlink socket", slog.Any("error", err))
 		}
 	}()
 
@@ -257,31 +259,43 @@ func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules 
 }
 
 func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
-	fmt.Printf("Initializing container %v on pod %s\n", container, pod.Name)
+	slog.Info("Initializing container on pod", slog.Any("pod", pod), slog.Any("container", container))
+
+	// Get the container ID
+	idx := strings.Index(container.ContainerID, "://")
+	if idx < 0 {
+		return fmt.Errorf("invalid container ID: %s", container.ContainerID)
+	}
+
 	status, err := criClient.ContainerStatus(context.Background(), &criV1.ContainerStatusRequest{
-		ContainerId: container.ContainerID,
+		ContainerId: container.ContainerID[idx+3:],
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)
 	}
-	fmt.Printf("%v\n", status)
+
+	slog.Debug("Container status", slog.Any("status", status))
 	return nil
 }
 
 func retireContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
-	fmt.Printf("Retiring container %v on pod %s\n", container, pod.Name)
+	slog.Info("Retiring container on pod", slog.Any("pod", pod), slog.Any("container", container))
 	return nil
 }
 
 func watchContainers(containers mapset.Set[string], clientset *kubernetes.Clientset, hostname *string) error {
-	fmt.Println("Watching for new containers...")
+	slog.Info("Watching for new containers...")
 
 	// Connect to the CRI runtime
 	conn, err := grpc.NewClient("unix:///run/containerd/containerd.sock", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
+	defer func() {
+		if conn.Close() != nil {
+			slog.Error("could not close connection to CRI runtime", slog.Any("error", err))
+		}
+	}()
 
 	// Create a new CRI runtime client
 	criClient := criV1.NewRuntimeServiceClient(conn)
@@ -300,26 +314,26 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 	go func() {
 		<-stop
 		watcher.Stop()
-		fmt.Println("Stopping watcher...")
+		slog.Info("Stopping watcher...")
 	}()
 	defer watcher.Stop()
 
-	fmt.Println("Press Ctrl+C to quit.")
+	slog.Info("Press Ctrl+C to quit.")
 
 	for event := range watcher.ResultChan() {
+		pod, ok := event.Object.(*v1.Pod)
+		if !ok {
+			slog.Error("could not cast event object to pod", slog.Any("event", event))
+			continue
+		}
 		switch event.Type {
 		case watch.Added, watch.Modified:
-			pod, ok := event.Object.(*v1.Pod)
-			if !ok {
-				fmt.Fprintf(os.Stderr, "could not cast event object to pod: %v", event.Object)
-				continue
-			}
 			if pod.Status.Phase == v1.PodRunning {
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Running != nil && !containers.Contains(container.ContainerID) {
 						// Initialize container
 						if err := initContainer(pod, container, criClient); err != nil {
-							fmt.Fprintf(os.Stderr, "could not initialize container: %v", err)
+							slog.Error("could not initialize container", slog.Any("error", err))
 							continue
 						}
 						// Add container to set
@@ -328,17 +342,12 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 				}
 			}
 		case watch.Deleted:
-			pod, ok := event.Object.(*v1.Pod)
-			if !ok {
-				fmt.Fprintf(os.Stderr, "could not cast event object to pod: %v", event.Object)
-				continue
-			}
 			if pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Terminated != nil && containers.Contains(container.ContainerID) {
 						// Retire container
 						if err := retireContainer(pod, container, criClient); err != nil {
-							fmt.Fprintf(os.Stderr, "could not retire container: %v", err)
+							slog.Error("could not retire container", slog.Any("error", err))
 							continue
 						}
 						// Remove container from set
@@ -383,7 +392,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 	defer func() {
 		if err := tcnl.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "could not close rtnetlink socket: %v\n", err)
+			slog.Error("could not close rtnetlink socket", slog.Any("error", err))
 		}
 	}()
 
@@ -399,7 +408,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 	defer func() {
 		if err := deleteQdisc(host, tcnl); err != nil {
-			fmt.Fprintf(os.Stderr, "could not delete host qdisc: %v\n", err)
+			slog.Error("could not delete host qdisc", slog.Any("error", err))
 		}
 	}()
 
@@ -415,7 +424,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 	defer func() {
 		if err := os.RemoveAll("/sys/fs/bpf/tc/globals"); err != nil {
-			fmt.Fprintf(os.Stderr, "could not remove directory for pinned maps: %v\n", err)
+			slog.Error("could not remove directory for pinned maps", slog.Any("error", err))
 		}
 	}()
 
@@ -432,18 +441,18 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	defer coll.Close()
 
 	// Print the loaded maps
-	fmt.Printf("Found %d maps:\n", len(coll.Maps))
+	slog.Debug("Found maps", slog.Int("count", len(coll.Maps)))
 	for name := range coll.Maps {
-		fmt.Printf("%s\n", name)
+		slog.Debug("Map name", slog.String("name", name))
 	}
 
 	// Print the loaded programs
-	fmt.Printf("Found %d programs:\n", len(coll.Programs))
+	slog.Debug("Found programs", slog.Int("count", len(coll.Programs)))
 	for name := range coll.Programs {
-		fmt.Printf("%s\n", name)
+		slog.Debug("Program name", slog.String("name", name))
 	}
 
-	// Load the egress init program on the hsot
+	// Load the egress init program on the host
 	if err := loadProgram(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
 		return fmt.Errorf("could not load egress init program: %v", err)
 	}
@@ -473,7 +482,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 			"table=ConntrackState, priority=190,ct_state=-new+trk,ip actions=resubmit(,AntreaPolicyEgressRule)",
 		}
 		if err := setEgressRules(clientset, config, rules); err != nil {
-			fmt.Fprintf(os.Stderr, "could not remove egress rules: %v\n", err)
+			slog.Error("could not remove egress rules", slog.Any("error", err))
 		}
 	}()
 
@@ -483,7 +492,7 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		return fmt.Errorf("could not get containers: %v", err)
 	}
 	for _, container := range containers.ToSlice() {
-		fmt.Printf("Found container: %v\n", container)
+		slog.Debug("Found container", slog.Any("container", container))
 	}
 
 	// Watch for new containers
@@ -521,7 +530,7 @@ func main() {
 	flag.Parse()
 
 	if err := run(hostname, kubeconfig, netdev, objPath); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		slog.Error("Error running oncache", slog.Any("error", err))
 		os.Exit(1)
 	}
 }
