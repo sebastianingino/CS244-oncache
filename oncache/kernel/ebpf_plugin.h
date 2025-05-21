@@ -14,7 +14,7 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
-typedef __u32 addr_t;
+typedef __be32 addr_t;
 typedef __u8 bool_t;
 #define true 1
 #define false 0

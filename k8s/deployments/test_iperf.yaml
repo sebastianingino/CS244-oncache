@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-iperf
+  labels:
+    app: client-iperf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-iperf
+  template:
+    metadata:
+      labels:
+        app: client-iperf
+    spec:
+      containers:
+        - name: client-iperf
+          image: networkstatic/iperf3
+          imagePullPolicy: IfNotPresent
+          command: ["sleep"]
+          args: ["infinity"]
+          ports:
+            - containerPort: 5201
+              protocol: TCP
+            - containerPort: 5201
+              protocol: UDP
+      nodeSelector:
+        bench-role: client
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-iperf
+  labels:
+    app: server-iperf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server-iperf
+  template:
+    metadata:
+      labels:
+        app: server-iperf
+    spec:
+      containers:
+        - name: server-iperf
+          image: networkstatic/iperf3
+          imagePullPolicy: IfNotPresent
+          args: ["-s"]
+          ports:
+            - containerPort: 5201
+              protocol: TCP
+            - containerPort: 5201
+              protocol: UDP
+      nodeSelector:
+        bench-role: server

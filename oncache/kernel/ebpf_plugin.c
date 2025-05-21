@@ -18,7 +18,7 @@
 // See: https://datatracker.ietf.org/doc/html/rfc7348#section-5
 #define VXLAN_UDP_PORT_MAX 65535
 
-#define DEBUG
+// #define DEBUG
 // Enable debug prints
 #ifdef DEBUG
 #define DEBUG_PRINT(...) bpf_printk("[DEBUG] " __VA_ARGS__)
@@ -27,6 +27,7 @@
     {                    \
     }
 #endif
+#define INFO_PRINT(...) bpf_printk("[INFO] " __VA_ARGS__)
 #define ERROR_PRINT(...) bpf_printk("[ERROR] " __VA_ARGS__)
 
 // Egress cache L1: container destination IP -> host destination IP
@@ -79,7 +80,7 @@ volatile struct interface_data host_interface = {
 // Attached to outgoing packets, host interface
 SEC("tc/egress_init")
 int egress_init(struct __sk_buff *skb) {
-    DEBUG_PRINT("egress_init called\n");
+    DEBUG_PRINT("egress_init called");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is long enough
@@ -89,7 +90,7 @@ int egress_init(struct __sk_buff *skb) {
     // Additional note: we don't need to check for a NULL pointer since the
     // we're guaranteed that skb->data is not NULL.
     if (skb->data_end < skb->data + sizeof(encap_headers_t)) {
-        DEBUG_PRINT("skb is not large enough\n");
+        DEBUG_PRINT("skb is not large enough");
         return TC_ACT_OK;
     }
 
@@ -98,26 +99,26 @@ int egress_init(struct __sk_buff *skb) {
 
     // Check if the outer packet is a VXLAN packet
     if (!is_vxlan_pkt(headers)) {
-        DEBUG_PRINT("Not a VXLAN packet\n");
+        DEBUG_PRINT("Not a VXLAN packet");
         return TC_ACT_OK;
     }
 
     // Get flow key and check if inner packet is long enough
     struct flow_key key;
     if (!to_flow_key(&headers->inner, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
+        DEBUG_PRINT("Failed to create flow key");
         return TC_ACT_OK;
     }
 
     // Check if the packet is marked as missed
     if (!has_mark(&headers->inner, MISSED_MARK)) {
-        DEBUG_PRINT("Packet not marked as missed\n");
+        DEBUG_PRINT("Packet not marked as missed");
         return TC_ACT_OK;
     }
 
     // Check if the packet is marked as established
     if (!has_mark(&headers->inner, EST_MARK)) {
-        DEBUG_PRINT("Packet not marked as established\n");
+        DEBUG_PRINT("Packet not marked as established");
         return TC_ACT_OK;
     }
     /** END: Packet Validation */
@@ -136,11 +137,11 @@ int egress_init(struct __sk_buff *skb) {
     int err = bpf_map_update_elem(&egress_host_cache, &container_dst_ip,
                                   &host_dst_ip, BPF_NOEXIST);
     if (err) {
-        ERROR_PRINT("Failed to update egress_host_cache: %d\n", err);
+        ERROR_PRINT("Failed to update egress_host_cache: %d", err);
         return TC_ACT_OK;
     } else {
-        DEBUG_PRINT("Updated egress_host_cache: %u -> %u\n", container_dst_ip,
-                    host_dst_ip);
+        INFO_PRINT("Updated egress_host_cache: %u -> %u", container_dst_ip,
+                   host_dst_ip);
     }
 
     // Add mapping (host destination IP -> (outer headers, inner MAC header,
@@ -148,11 +149,10 @@ int egress_init(struct __sk_buff *skb) {
     err = bpf_map_update_elem(&egress_data_cache, &host_dst_ip, &data,
                               BPF_NOEXIST);
     if (err) {
-        ERROR_PRINT("Failed to update egress_data_cache: %d\n", err);
+        ERROR_PRINT("Failed to update egress_data_cache: %d", err);
         return TC_ACT_OK;
     } else {
-        DEBUG_PRINT("Updated egress_data_cache: %u -> egress_data\n",
-                    host_dst_ip);
+        INFO_PRINT("Updated egress_data_cache: %u -> egress_data", host_dst_ip);
     }
 
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
@@ -168,13 +168,13 @@ int egress_init(struct __sk_buff *skb) {
             bpf_map_lookup_elem(&filter_cache, &key);
         if (existing_action) {
             existing_action->egress = 1;
-            DEBUG_PRINT("Updated filter_cache\n");
+            DEBUG_PRINT("Updated filter_cache");
         } else {
-            ERROR_PRINT("Failed to update filter_cache: %d\n", err);
+            ERROR_PRINT("Failed to update filter_cache: %d", err);
             return TC_ACT_OK;
         }
     } else {
-        DEBUG_PRINT("Updated filter_cache\n");
+        DEBUG_PRINT("Updated filter_cache");
     }
     /** END: Cache Initialization */
 
@@ -189,13 +189,13 @@ int egress_init(struct __sk_buff *skb) {
 // Attached to outgoing packets, host veth interface
 SEC("tc/egress")
 int egress(struct __sk_buff *skb) {
-    DEBUG_PRINT("egress called\n");
+    DEBUG_PRINT("egress called");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is long enough
     // Note: NO encapsulation since we're attached to the host veth
     if (skb->data_end < skb->data + sizeof(inner_headers_t)) {
-        DEBUG_PRINT("skb is not large enough\n");
+        DEBUG_PRINT("skb is not large enough");
         return TC_ACT_OK;
     }
     // Get the headers
@@ -204,7 +204,7 @@ int egress(struct __sk_buff *skb) {
     // Get flow key and check if the packet is long enough
     struct flow_key key;
     if (!to_flow_key(headers, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
+        DEBUG_PRINT("Failed to create flow key");
         return TC_ACT_OK;
     }
     /** END: Packet Validation */
@@ -215,7 +215,8 @@ int egress(struct __sk_buff *skb) {
     addr_t *host_dst_ip =
         bpf_map_lookup_elem(&egress_host_cache, &headers->ip.daddr);
     if (!host_dst_ip) {
-        DEBUG_PRINT("Host destination IP not found in egress_host_cache\n");
+        INFO_PRINT("Host destination IP %d not found in egress_host_cache",
+                   headers->ip.daddr);
         mark(headers, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -223,21 +224,21 @@ int egress(struct __sk_buff *skb) {
     struct egress_data *data =
         bpf_map_lookup_elem(&egress_data_cache, host_dst_ip);
     if (!data) {
-        DEBUG_PRINT("Egress data not found for host destination IP: %u\n",
-                    *host_dst_ip);
+        INFO_PRINT("Egress data not found for host destination IP: %u",
+                   *host_dst_ip);
         mark(headers, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
-        DEBUG_PRINT("Filter action not found for flow key\n");
+        INFO_PRINT("Filter action not found for flow key");
         mark(headers, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     if (!action->egress || !action->ingress) {
-        DEBUG_PRINT("Filter action not allowed: ingress=%u, egress=%u\n",
-                    action->ingress, action->egress);
+        INFO_PRINT("Filter action not allowed: ingress=%u, egress=%u",
+                   action->ingress, action->egress);
         mark(headers, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -245,9 +246,9 @@ int egress(struct __sk_buff *skb) {
 
     /** BEGIN: Reverse Cache Validation */
     struct ingress_data *ingress_data =
-        bpf_map_lookup_elem(&ingress_cache, &headers->ip.daddr);
+        bpf_map_lookup_elem(&ingress_cache, &headers->ip.saddr);
     if (!ingress_data) {
-        DEBUG_PRINT("Ingress data not found for IP: %u\n", headers->ip.daddr);
+        INFO_PRINT("Ingress data not found for IP: %u", headers->ip.saddr);
         mark(headers, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -268,7 +269,7 @@ int egress(struct __sk_buff *skb) {
                 sizeof(struct ethhdr)) |   // Reserve space for outer MAC header
             BPF_F_ADJ_ROOM_ENCAP_L2_ETH);  // L2 tunnel type: Ethernet
     if (err || skb->data_end < skb->data + sizeof(outer_headers_t)) {
-        ERROR_PRINT("Failed to adjust skb room: %d\n", err);
+        ERROR_PRINT("Failed to adjust skb room: %d", err);
         return TC_ACT_OK;
     }
 
@@ -292,7 +293,7 @@ int egress(struct __sk_buff *skb) {
     // Re-check length due to L3 checksum replacement invalidating pointers
     if (skb->data_end <
         skb->data + sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
-        ERROR_PRINT("Failed to re-check skb length\n");
+        ERROR_PRINT("Failed to re-check skb length");
         return TC_ACT_OK;
     }
 
@@ -317,13 +318,13 @@ int egress(struct __sk_buff *skb) {
 // Attached to incoming packets, container veth interface
 SEC("tc/ingress_init")
 int ingress_init(struct __sk_buff *skb) {
-    DEBUG_PRINT("ingress_init called\n");
+    DEBUG_PRINT("ingress_init called");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: NO encapsulation since we're attached to the container veth
     if (skb->data_end < skb->data + sizeof(inner_headers_t)) {
-        DEBUG_PRINT("skb is not large enough\n");
+        DEBUG_PRINT("skb is not large enough");
         return TC_ACT_OK;
     }
 
@@ -333,18 +334,18 @@ int ingress_init(struct __sk_buff *skb) {
     // Get flow key and check if the packet is long enough
     struct flow_key key;
     if (!to_flow_key(headers, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
+        DEBUG_PRINT("Failed to create flow key");
         return TC_ACT_OK;
     }
 
     // Check if the packet is marked as missed
     if (!has_mark(headers, MISSED_MARK)) {
-        DEBUG_PRINT("Packet not marked as missed\n");
+        DEBUG_PRINT("Packet not marked as missed");
         return TC_ACT_OK;
     }
     // Check if the packet is marked as established
     if (!has_mark(headers, EST_MARK)) {
-        DEBUG_PRINT("Packet not marked as established\n");
+        DEBUG_PRINT("Packet not marked as established");
         return TC_ACT_OK;
     }
     /** END: Packet Validation */
@@ -355,7 +356,7 @@ int ingress_init(struct __sk_buff *skb) {
     struct ingress_data *data =
         bpf_map_lookup_elem(&ingress_cache, &headers->ip.daddr);
     if (!data) {
-        DEBUG_PRINT("Ingress data not found for IP: %u\n", headers->ip.daddr);
+        INFO_PRINT("Ingress data not found for IP: %u", headers->ip.daddr);
         return TC_ACT_OK;
     }
     /** END: Check Daemon State */
@@ -378,13 +379,13 @@ int ingress_init(struct __sk_buff *skb) {
             bpf_map_lookup_elem(&filter_cache, &key);
         if (existing_action) {
             existing_action->ingress = 1;
-            DEBUG_PRINT("Updated filter_cache\n");
+            DEBUG_PRINT("Updated filter_cache");
         } else {
-            ERROR_PRINT("Failed to update filter_cache: %d\n", err);
+            ERROR_PRINT("Failed to update filter_cache: %d", err);
             return TC_ACT_OK;
         }
     } else {
-        DEBUG_PRINT("Updated filter_cache\n");
+        DEBUG_PRINT("Updated filter_cache");
     }
     /** END: Cache Initialization */
 
@@ -399,13 +400,13 @@ int ingress_init(struct __sk_buff *skb) {
 // Attached to incoming packets, host interface
 SEC("tc/ingress")
 int ingress(struct __sk_buff *skb) {
-    DEBUG_PRINT("ingress called\n");
+    DEBUG_PRINT("ingress called");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
     // Note: we expect encapsulation since we're attached to the host interface
     if (skb->data_end < skb->data + sizeof(encap_headers_t)) {
-        DEBUG_PRINT("skb is not large enough\n");
+        DEBUG_PRINT("skb is not large enough");
         return TC_ACT_OK;
     }
 
@@ -414,14 +415,14 @@ int ingress(struct __sk_buff *skb) {
 
     // Check if the outer packet is a VXLAN packet
     if (!is_vxlan_pkt(headers)) {
-        DEBUG_PRINT("Not a VXLAN packet\n");
+        DEBUG_PRINT("Not a VXLAN packet");
         return TC_ACT_OK;
     }
 
     // Get flow key and check if the inner packet is long enough
     struct flow_key key;
     if (!to_flow_key(&headers->inner, skb, &key)) {
-        DEBUG_PRINT("Failed to create flow key\n");
+        DEBUG_PRINT("Failed to create flow key");
         return TC_ACT_OK;
     }
 
@@ -429,16 +430,17 @@ int ingress(struct __sk_buff *skb) {
     /** BEGIN: Interface Validation */
     // Get the interface data
     if (host_interface.ip == 0) {
-        DEBUG_PRINT("Host interface not initialized\n");
+        DEBUG_PRINT("Host interface not initialized");
         return TC_ACT_OK;
     }
     // Check if the packet matches the interface data
     if (!equal_buf(host_interface.mac, headers->outer.eth.h_dest, ETH_ALEN)) {
-        DEBUG_PRINT("Packet does not match interface eth address\n");
+        INFO_PRINT("Packet does not match interface eth address");
         return TC_ACT_OK;
     }
     if (host_interface.ip != headers->outer.ip.daddr) {
-        DEBUG_PRINT("Packet does not match interface IP address\n");
+        INFO_PRINT("Packet IP (%u) does not match interface IP address (%u)",
+                   headers->outer.ip.daddr, host_interface.ip);
         return TC_ACT_OK;
     }
     /** END: Interface Validation */
@@ -450,21 +452,21 @@ int ingress(struct __sk_buff *skb) {
     struct ingress_data *data =
         bpf_map_lookup_elem(&ingress_cache, &headers->inner.ip.daddr);
     if (!data) {
-        DEBUG_PRINT("Ingress data not found for IP: %u\n",
-                    headers->inner.ip.daddr);
+        INFO_PRINT("Ingress data not found for IP: %u",
+                   headers->inner.ip.daddr);
         mark(&headers->inner, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
-        DEBUG_PRINT("Filter action not found for flow key\n");
+        INFO_PRINT("Filter action not found for flow key");
         mark(&headers->inner, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     if (!action->ingress || !action->egress) {
-        DEBUG_PRINT("Filter action not allowed: ingress=%u, egress=%u\n",
-                    action->ingress, action->egress);
+        INFO_PRINT("Filter action not allowed: ingress=%u, egress=%u",
+                   action->ingress, action->egress);
         mark(&headers->inner, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -472,9 +474,10 @@ int ingress(struct __sk_buff *skb) {
     /** BEGIN: Reverse Cache Validation */
     // Check if mapping in egress cache L1 exists
     addr_t *host_dst_ip =
-        bpf_map_lookup_elem(&egress_host_cache, &headers->inner.ip.daddr);
+        bpf_map_lookup_elem(&egress_host_cache, &headers->inner.ip.saddr);
     if (!host_dst_ip) {
-        DEBUG_PRINT("Host destination IP not found in egress_host_cache\n");
+        INFO_PRINT("Host destination IP not found in egress_host_cache: %u",
+                   headers->inner.ip.saddr);
         mark(&headers->inner, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -487,7 +490,7 @@ int ingress(struct __sk_buff *skb) {
         BPF_ADJ_ROOM_MAC,  // shrink at the MAC (between L2 and L3) layer
         0);                // No flags needed since we're shrinking the skb
     if (err || skb->data_end < skb->data + sizeof(inner_headers_t)) {
-        ERROR_PRINT("Failed to adjust skb room: %d\n", err);
+        ERROR_PRINT("Failed to adjust skb room: %d", err);
         return TC_ACT_OK;
     }
 
