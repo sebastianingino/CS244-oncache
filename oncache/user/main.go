@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net"
 	"os"
 	"os/signal"
@@ -587,8 +586,8 @@ func run(hostname, kubeconfig, hostNetdev, containerNetdev, objPath *string) err
 	}
 	defer coll.Close()
 
-	slog.Debug("Found maps", slog.Any("maps", maps.Keys(coll.Maps)))
-	slog.Debug("Found programs", slog.Any("programs", maps.Keys(coll.Programs)))
+	slog.Debug("Found maps", slog.Any("maps", coll.Maps))
+	slog.Debug("Found programs", slog.Any("programs", coll.Programs))
 
 	// Load the egress init program on the host
 	if err := loadProgram(coll.Programs["egress_init"], tc.HandleMinEgress, host, tcnl); err != nil {
