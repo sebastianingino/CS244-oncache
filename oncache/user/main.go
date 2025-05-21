@@ -315,6 +315,9 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 	return netInterface.Index, nil
 }
 
+func addIngressData(pod *v1.Pod, container v1.ContainerStatus, coll *ebpf.Collection) error {
+}
+
 func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient, containerNetdev *string, coll *ebpf.Collection) error {
 	slog.Info("Initializing container on pod", slog.Any("pod", pod.Name), slog.Any("container", container.ContainerID))
 
@@ -382,6 +385,8 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	if err := loadProgram(coll.Programs["egress"], tc.HandleMinEgress, veth, tcnl); err != nil {
 		return fmt.Errorf("could not load veth program: %v", err)
 	}
+
+	// Add the pod data to the ingress map
 
 	return nil
 }

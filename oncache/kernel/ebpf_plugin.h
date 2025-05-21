@@ -7,10 +7,10 @@
 #include <bpf/bpf_endian.h>
 #include <bpf/bpf_helpers.h>
 #include <linux/bpf.h>
-#include <linux/pkt_cls.h>
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/pkt_cls.h>
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
@@ -53,11 +53,12 @@ struct egress_data {
     __u32 ifindex;
 };
 
-// Ingress cache: container destination IP -> (inner MAC header, veth interface
-// index) vindex maintained by daemon, inner MAC header maintained by eBPF
+// Ingress cache: container destination IP -> (veth interface index, inner MAC
+// header)
+// vindex maintained by daemon, inner MAC header maintained by eBPF
 struct ingress_data {
-    struct ethhdr eth;
     __u32 vindex;
+    struct ethhdr eth;
 };
 
 // Filter cache: (source IP, source port, dest IP, dest port, protocol) ->
@@ -154,7 +155,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
 }
 
 // Check if two buffers are equal
-static inline bool_t equal_buf(volatile __u8 *buf1, volatile __u8 *buf2, __u32 len) {
+static inline bool_t equal_buf(volatile __u8 *buf1, volatile __u8 *buf2,
+                               __u32 len) {
     for (__u32 i = 0; i < len; i++) {
         if (buf1[i] != buf2[i]) {
             return false;

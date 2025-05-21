@@ -48,8 +48,8 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } egress_data_cache SEC(".maps");
 
-// Ingress cache: container destination IP -> (inner MAC header, veth interface
-// index)
+// Ingress cache: container destination IP -> (veth interface index, inner MAC
+// header)
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, addr_t);
