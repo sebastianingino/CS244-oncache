@@ -12,12 +12,14 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/florianl/go-tc"
 	"github.com/florianl/go-tc/core"
+	"github.com/lmittmann/tint"
 	"github.com/mdlayher/netlink"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
@@ -317,13 +319,13 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 	slog.Info("Press Ctrl+C to quit.")
 
 	for event := range watcher.ResultChan() {
-		pod, ok := event.Object.(*v1.Pod)
-		if !ok {
-			slog.Error("could not cast event object to pod", slog.Any("event", event))
-			continue
-		}
 		switch event.Type {
 		case watch.Added, watch.Modified:
+			pod, ok := event.Object.(*v1.Pod)
+			if !ok {
+				slog.Error("could not cast event object to pod", slog.Any("event", event))
+				continue
+			}
 			if pod.Status.Phase == v1.PodRunning {
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Running != nil && !containers.Contains(container.ContainerID) {
@@ -338,6 +340,11 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 				}
 			}
 		case watch.Deleted:
+			pod, ok := event.Object.(*v1.Pod)
+			if !ok {
+				slog.Error("could not cast event object to pod", slog.Any("event", event))
+				continue
+			}
 			if pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Terminated != nil && containers.Contains(container.ContainerID) {
@@ -500,6 +507,14 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 }
 
 func main() {
+	// Set up logging
+	slog.SetDefault(slog.New(
+		tint.NewHandler(os.Stderr, &tint.Options{
+			Level:      slog.LevelDebug,
+			TimeFormat: time.Kitchen,
+		}),
+	))
+
 	// Set up kubeconfig flag
 	var kubeconfig *string
 	if home := homedir.HomeDir(); home != "" {
