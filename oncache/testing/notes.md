@@ -60,7 +60,7 @@ sudo tc qdisc del dev dummy0 clsact
 We can load the eBPF program using the following command:
 
 ```bash
-sudo tc filter add dev dummy0 egress bpf da obj ./ebpf_plugin.o sec egress_init
+sudo tc filter add dev dummy0 egress bpf da obj ./ebpf_plugin.o sec classifer/egress_init
 ```
 
 To show the filters, we can use the following command:

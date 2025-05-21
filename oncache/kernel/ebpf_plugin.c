@@ -79,7 +79,7 @@ struct {
 
 // Egress init hook
 // Attached to outgoing packets, host interface
-SEC("egress_init")
+SEC("classifier/egress_init")
 int egress_init_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("egress called\n");
 
@@ -189,7 +189,7 @@ int egress_init_prog(struct __sk_buff *skb) {
 
 // Egress hook (called before egress_init)
 // Attached to outgoing packets, host veth interface
-SEC("egress")
+SEC("classifier/egress")
 int egress_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("egress called\n");
 
@@ -317,7 +317,7 @@ int egress_prog(struct __sk_buff *skb) {
 
 // Ingress init hook
 // Attached to incoming packets, container veth interface
-SEC("ingress_init")
+SEC("classifier/ingress_init")
 int ingress_init_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress_init called\n");
 
@@ -399,7 +399,7 @@ int ingress_init_prog(struct __sk_buff *skb) {
 
 // Ingress hook (called before ingress_init)
 // Attached to incoming packets, host interface
-SEC("ingress")
+SEC("classifier/ingress")
 int ingress_prog(struct __sk_buff *skb) {
     DEBUG_PRINT("ingress called\n");
 
