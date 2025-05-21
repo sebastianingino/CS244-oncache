@@ -89,12 +89,17 @@ static bool_t is_vxlan_port(__u16 port) {
     return port == bpf_htons(4789) || port == bpf_htons(8472);
 }
 
+// Check if UDP port is GENEVE
+// See https://datatracker.ietf.org/doc/html/rfc8926#section-3.1
+static bool_t is_geneve_port(__u16 port) { return port == bpf_htons(6081); }
+
 // Check if packet is a VXLAN packet
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
 static bool_t is_vxlan_pkt(encap_headers_t *headers) {
     return headers->outer.eth.h_proto == bpf_htons(ETH_P_IP) &&
            headers->outer.ip.protocol == IPPROTO_UDP &&
-           is_vxlan_port(headers->outer.udp.dest);
+           (is_vxlan_port(headers->outer.udp.dest) ||
+            is_geneve_port(headers->outer.udp.dest));
 }
 
 // Check if packet was marked as missed
