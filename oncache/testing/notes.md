@@ -82,3 +82,11 @@ You can read the log pipe with the following command:
 ```bash
 sudo cat  /sys/kernel/debug/tracing/trace_pipe
 ```
+
+### Print maps
+
+You can print the pinned eBPF maps using the following command:
+
+```bash
+sudo bpftool map dump pinned /sys/fs/bpf/ebpf_plugin/ebpf_plugin/maps
+```
