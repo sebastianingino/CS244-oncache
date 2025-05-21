@@ -315,7 +315,26 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 	return netInterface.Index, nil
 }
 
-func addIngressData(pod *v1.Pod, container v1.ContainerStatus, coll *ebpf.Collection) error {
+func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
+	// Get the ingress map
+	ingressMap, ok := coll.Maps["ingress_cache"]
+	if !ok {
+		return fmt.Errorf("ingress_cache map not found")
+	}
+
+	type IngressData struct {
+		VethIdx uint32
+		Ethhdr  [14]byte
+	}
+
+	data := IngressData{
+		VethIdx: uint32(vethIdx),
+	}
+	if err := ingressMap.Put(pod.UID, data); err != nil {
+		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
+	}
+
+	return nil
 }
 
 func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient, containerNetdev *string, coll *ebpf.Collection) error {
@@ -348,13 +367,13 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	}
 
 	// Load the container plugin
-	interfaceIdx, err := loadContainerPlugin(int(pid), containerNetdev, coll)
+	vethIdx, err := loadContainerPlugin(int(pid), containerNetdev, coll)
 	if err != nil {
 		return fmt.Errorf("failed to load container plugin: %v", err)
 	}
 
 	// Get the veth interface
-	veth, err := net.InterfaceByIndex(interfaceIdx)
+	veth, err := net.InterfaceByIndex(vethIdx)
 	if err != nil {
 		return fmt.Errorf("failed to get veth interface: %v", err)
 	}
@@ -387,12 +406,15 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	}
 
 	// Add the pod data to the ingress map
+	if err := addIngressData(pod, vethIdx, coll); err != nil {
+		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
+	}
 
 	return nil
 }
 
 func retireContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
-	slog.Info("Retiring container on pod", slog.Any("pod", pod), slog.Any("container", container))
+	slog.Info("Retiring container on pod", slog.Any("pod", pod.Name), slog.Any("container", container.ContainerID))
 	return nil
 }
 
