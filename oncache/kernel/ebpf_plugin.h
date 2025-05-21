@@ -59,7 +59,7 @@ struct egress_data {
 struct ingress_data {
     __u32 vindex;
     struct ethhdr eth;
-};
+} __attribute__((packed));
 
 // Filter cache: (source IP, source port, dest IP, dest port, protocol) ->
 // (ingress action, egress action)

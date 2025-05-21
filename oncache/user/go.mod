@@ -9,6 +9,7 @@ require (
 	github.com/florianl/go-tc v0.4.5
 	github.com/lmittmann/tint v1.1.0
 	github.com/mdlayher/netlink v1.7.2
+	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
 	golang.org/x/sys v0.31.0
 	google.golang.org/grpc v1.72.1

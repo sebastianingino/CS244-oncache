@@ -313,9 +313,9 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 	}
 
 	// Get the parent link index
-	nlInterface, _ := nl.LinkByName(*containerNetdev)
+	nlInterface, _ := nl.LinkByIndex(netInterface.Index)
 
-	return nlInterface.ParentIndex, nil
+	return nlInterface.Attrs().ParentIndex, nil
 }
 
 func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
@@ -426,6 +426,8 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	if err := addIngressData(pod, vethIdx, coll); err != nil {
 		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
 	}
+
+	slog.Debug("Initialized container", slog.Any("pod", pod.Name), slog.Any("container", container.ContainerID))
 
 	return nil
 }
