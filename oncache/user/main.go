@@ -658,10 +658,10 @@ func main() {
 	}
 
 	// Set up the host network device flag
-	var hostNetdev = flag.String("netdev", DEFAULT_HOST_NETDEV, "(optional) host network device to use")
+	var hostNetdev = flag.String("hostNetdev", DEFAULT_HOST_NETDEV, "(optional) host network device to use")
 
 	// Set up the container network device flag
-	var containerNetdev = flag.String("netdev", DEFAULT_POD_NETDEV, "(optional) container network device to use")
+	var containerNetdev = flag.String("containerNetdev", DEFAULT_POD_NETDEV, "(optional) container network device to use")
 
 	// Set up the object path flag
 	var objPath = flag.String("objpath", DEFAULT_OBJ_PATH, "(optional) path to the eBPF object file")
