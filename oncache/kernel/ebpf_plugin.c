@@ -69,7 +69,7 @@ struct {
 } filter_cache SEC(".maps");
 
 // Host interface: (MAC address, IP address)
-// See (globals): https://ebpf-go.dev/concepts/global-variables/#global-variables
+// See: https://ebpf-go.dev/concepts/global-variables/#global-variables
 volatile struct interface_data host_interface = {
     .mac = {0},
     .ip = 0,
@@ -450,7 +450,8 @@ int ingress(struct __sk_buff *skb) {
     struct ingress_data *data =
         bpf_map_lookup_elem(&ingress_cache, &headers->inner.ip.daddr);
     if (!data) {
-        DEBUG_PRINT("Ingress data not found for IP: %u\n", headers->inner.ip.daddr);
+        DEBUG_PRINT("Ingress data not found for IP: %u\n",
+                    headers->inner.ip.daddr);
         mark(&headers->inner, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
