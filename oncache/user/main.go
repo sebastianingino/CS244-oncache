@@ -6,14 +6,17 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -21,6 +24,7 @@ import (
 	"github.com/florianl/go-tc/core"
 	"github.com/lmittmann/tint"
 	"github.com/mdlayher/netlink"
+	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,11 +40,12 @@ import (
 	criV1 "k8s.io/cri-api/pkg/apis/runtime/v1"
 )
 
-const DEFAULT_NETDEV = "ens4"
+const DEFAULT_HOST_NETDEV = "ens4"
+const DEFAULT_POD_NETDEV = "eth0"
 const DEFAULT_OBJ_PATH = "../kernel/ebpf_plugin.o"
 
 func createQdisc(netdev *net.Interface, tcnl *tc.Tc) error {
-	// Create qdisc on host
+	// Create clsact qdisc on interface
 	qdisc := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
@@ -61,7 +66,7 @@ func createQdisc(netdev *net.Interface, tcnl *tc.Tc) error {
 }
 
 func deleteQdisc(netdev *net.Interface, tcnl *tc.Tc) error {
-	// Delete qdisc on host
+	// Delete clsact qdisc on interface
 	qdisc := tc.Object{
 		Msg: tc.Msg{
 			Family:  unix.AF_UNSPEC,
@@ -103,7 +108,7 @@ func getContainers(clientset *kubernetes.Clientset, hostname *string) (mapset.Se
 	return containers, nil
 }
 
-func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) error {
+func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface, tcnl *tc.Tc) error {
 	// Check if the program is a TC program
 	if prog == nil {
 		return fmt.Errorf("program is nil")
@@ -116,17 +121,6 @@ func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) er
 	if direction != tc.HandleMinIngress && direction != tc.HandleMinEgress {
 		return fmt.Errorf("invalid direction: %v", direction)
 	}
-
-	// open a rtnetlink socket
-	tcnl, err := tc.Open(&tc.Config{})
-	if err != nil {
-		return fmt.Errorf("could not open rtnetlink socket: %v", err)
-	}
-	defer func() {
-		if err := tcnl.Close(); err != nil {
-			slog.Error("could not close rtnetlink socket", slog.Any("error", err))
-		}
-	}()
 
 	// Attach the eBPF program to the network device
 	fd := uint32(prog.FD())
@@ -159,7 +153,7 @@ func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) er
 func setInterface(hostInterface *ebpf.Variable, netdev *net.Interface) error {
 	// Check if variable exists
 	if hostInterface == nil {
-		return fmt.Errorf("variable or spec is nil")
+		return fmt.Errorf("hostInterface variable is nil")
 	}
 
 	// Value struct
@@ -219,6 +213,7 @@ func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules 
 	// Command
 	// See: https://www.openvswitch.org/support/dist-docs/ovs-ofctl.8.html
 	// And: https://antrea.io/docs/main/docs/design/ovs-pipeline/
+	// Note: I try SO hard to keep everything in Goland but we have to use the shell :(
 	cmd := []string{"ovs-ofctl", "mod-flows", "br-int"}
 
 	for _, pod := range pods.Items {
@@ -256,8 +251,72 @@ func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules 
 	return nil
 }
 
-func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
-	slog.Info("Initializing container on pod", slog.Any("pod", pod), slog.Any("container", container))
+func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.Collection) (int, error) {
+	// Lock the OS thread so we don't accidentally switch namespaces
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	// Save current network namespace
+	hostNetNS, err := netns.Get()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get host network namespace: %v", err)
+	}
+	defer hostNetNS.Close()
+
+	// Get container network namespace
+	containerNetNS, err := netns.GetFromPid(containerPid)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get container network namespace: %v", err)
+	}
+	defer containerNetNS.Close()
+
+	// Step into container net namespace
+	netns.Set(containerNetNS)
+	defer func() {
+		if err := netns.Set(hostNetNS); err != nil {
+			// We should never fail to set the host namespace but if we do, we should freak out
+			panic(fmt.Errorf("failed to set host network namespace: %v", err))
+		}
+	}()
+
+	// Get the container network interface
+	netInterface, err := net.InterfaceByName(*containerNetdev)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get container network interface: %v", err)
+	}
+
+	// open a rtnetlink socket
+	tcnl, err := tc.Open(&tc.Config{})
+	if err != nil {
+		return 0, fmt.Errorf("could not open rtnetlink socket: %v", err)
+	}
+	defer func() {
+		if err := tcnl.Close(); err != nil {
+			slog.Error("could not close rtnetlink socket", slog.Any("error", err))
+		}
+	}()
+
+	// For enhanced error messages from the kernel, it is recommended to set
+	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
+	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
+		return 0, fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
+	}
+
+	// Add a qdisc to the container interface
+	if err := createQdisc(netInterface, tcnl); err != nil {
+		return 0, fmt.Errorf("could not create container qdisc: %v", err)
+	}
+
+	// Load the ingress init program on the container
+	if err := loadProgram(coll.Programs["ingress_init"], tc.HandleMinIngress, netInterface, tcnl); err != nil {
+		return 0, fmt.Errorf("could not load container program: %v", err)
+	}
+
+	return netInterface.Index, nil
+}
+
+func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient, containerNetdev *string, coll *ebpf.Collection) error {
+	slog.Info("Initializing container on pod", slog.Any("pod", pod.Name), slog.Any("container", container.ContainerID))
 
 	// Get the container ID
 	idx := strings.Index(container.ContainerID, "://")
@@ -265,14 +324,65 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 		return fmt.Errorf("invalid container ID: %s", container.ContainerID)
 	}
 
+	// Get container status
 	status, err := criClient.ContainerStatus(context.Background(), &criV1.ContainerStatusRequest{
 		ContainerId: container.ContainerID[idx+3:],
+		Verbose:     true, // Get extra info: needed for pid
 	})
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)
 	}
+	info, ok := status.Info["info"]
+	if !ok {
+		return fmt.Errorf("failed to get container info")
+	}
 
-	slog.Debug("Container status", slog.Any("status", status))
+	// Get container pid
+	// Note: this makes me sad (you should see the raw json)
+	pid, err := jsonparser.GetInt([]byte(info), "pid")
+	if err != nil {
+		return fmt.Errorf("failed to get pid from container info: %v", err)
+	}
+
+	// Load the container plugin
+	interfaceIdx, err := loadContainerPlugin(int(pid), containerNetdev, coll)
+	if err != nil {
+		return fmt.Errorf("failed to load container plugin: %v", err)
+	}
+
+	// Get the veth interface
+	veth, err := net.InterfaceByIndex(interfaceIdx)
+	if err != nil {
+		return fmt.Errorf("failed to get veth interface: %v", err)
+	}
+
+	// open a rtnetlink socket
+	tcnl, err := tc.Open(&tc.Config{})
+	if err != nil {
+		return fmt.Errorf("could not open rtnetlink socket: %v", err)
+	}
+	defer func() {
+		if err := tcnl.Close(); err != nil {
+			slog.Error("could not close rtnetlink socket", slog.Any("error", err))
+		}
+	}()
+
+	// For enhanced error messages from the kernel, it is recommended to set
+	// option `NETLINK_EXT_ACK`, which is supported since 4.12 kernel.
+	if err := tcnl.SetOption(netlink.ExtendedAcknowledge, true); err != nil {
+		return fmt.Errorf("could not set option ExtendedAcknowledge: %v", err)
+	}
+
+	// Add a qdisc to the veth interface
+	if err := createQdisc(veth, tcnl); err != nil {
+		return fmt.Errorf("could not create veth qdisc: %v", err)
+	}
+
+	// Load the egress program on the veth interface
+	if err := loadProgram(coll.Programs["egress"], tc.HandleMinEgress, veth, tcnl); err != nil {
+		return fmt.Errorf("could not load veth program: %v", err)
+	}
+
 	return nil
 }
 
@@ -281,7 +391,14 @@ func retireContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.
 	return nil
 }
 
-func watchContainers(containers mapset.Set[string], clientset *kubernetes.Clientset, hostname *string) error {
+func watchContainers(clientset *kubernetes.Clientset, hostname *string, containerNetdev *string, coll *ebpf.Collection) error {
+	// Get the initial list of containers
+	containers, err := getContainers(clientset, hostname)
+	if err != nil {
+		return fmt.Errorf("could not get containers: %v", err)
+	}
+	slog.Debug("Found containers", slog.Any("containers", containers))
+
 	slog.Info("Watching for new containers...")
 
 	// Connect to the CRI runtime
@@ -330,7 +447,7 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Running != nil && !containers.Contains(container.ContainerID) {
 						// Initialize container
-						if err := initContainer(pod, container, criClient); err != nil {
+						if err := initContainer(pod, container, criClient, containerNetdev, coll); err != nil {
 							slog.Error("could not initialize container", slog.Any("error", err))
 							continue
 						}
@@ -364,7 +481,7 @@ func watchContainers(containers mapset.Set[string], clientset *kubernetes.Client
 	return nil
 }
 
-func run(hostname, kubeconfig, netdev, objPath *string) error {
+func run(hostname, kubeconfig, hostNetdev, containerNetdev, objPath *string) error {
 	// Build the Kubernetes client configuration
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
@@ -377,10 +494,10 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		return fmt.Errorf("could not create Kubernetes clientset: %v", err)
 	}
 
-	// Get the network device ID
-	host, err := net.InterfaceByName(*netdev)
+	// Get the host network interface
+	host, err := net.InterfaceByName(*hostNetdev)
 	if err != nil {
-		return fmt.Errorf("could not get network device ID: %v", err)
+		return fmt.Errorf("could not get host network interface: %v", err)
 	}
 
 	// Remove rlimit
@@ -443,25 +560,16 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 	}
 	defer coll.Close()
 
-	// Print the loaded maps
-	slog.Debug("Found maps", slog.Int("count", len(coll.Maps)))
-	for name := range coll.Maps {
-		slog.Debug("Map name", slog.String("name", name))
-	}
-
-	// Print the loaded programs
-	slog.Debug("Found programs", slog.Int("count", len(coll.Programs)))
-	for name := range coll.Programs {
-		slog.Debug("Program name", slog.String("name", name))
-	}
+	slog.Debug("Found maps", slog.Any("maps", maps.Keys(coll.Maps)))
+	slog.Debug("Found programs", slog.Any("programs", maps.Keys(coll.Programs)))
 
 	// Load the egress init program on the host
-	if err := loadProgram(coll.Programs["egress_init"], tc.HandleMinEgress, host); err != nil {
+	if err := loadProgram(coll.Programs["egress_init"], tc.HandleMinEgress, host, tcnl); err != nil {
 		return fmt.Errorf("could not load egress init program: %v", err)
 	}
 
 	// Load the ingress program on the host
-	if err := loadProgram(coll.Programs["ingress"], tc.HandleMinIngress, host); err != nil {
+	if err := loadProgram(coll.Programs["ingress"], tc.HandleMinIngress, host, tcnl); err != nil {
 		return fmt.Errorf("could not load ingress program: %v", err)
 	}
 
@@ -489,17 +597,8 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		}
 	}()
 
-	// Get the list of containers
-	containers, err := getContainers(clientset, hostname)
-	if err != nil {
-		return fmt.Errorf("could not get containers: %v", err)
-	}
-	for _, container := range containers.ToSlice() {
-		slog.Debug("Found container", slog.Any("container", container))
-	}
-
 	// Watch for new containers
-	if err := watchContainers(containers, clientset, hostname); err != nil {
+	if err := watchContainers(clientset, hostname, containerNetdev, coll); err != nil {
 		return fmt.Errorf("could not watch containers: %v", err)
 	}
 
@@ -531,8 +630,11 @@ func main() {
 		hostname = flag.String("hostname", "", "hostname of the node")
 	}
 
-	// Set up the network device flag
-	var netdev = flag.String("netdev", DEFAULT_NETDEV, "(optional) network device to use")
+	// Set up the host network device flag
+	var hostNetdev = flag.String("netdev", DEFAULT_HOST_NETDEV, "(optional) host network device to use")
+
+	// Set up the container network device flag
+	var containerNetdev = flag.String("netdev", DEFAULT_POD_NETDEV, "(optional) container network device to use")
 
 	// Set up the object path flag
 	var objPath = flag.String("objpath", DEFAULT_OBJ_PATH, "(optional) path to the eBPF object file")
@@ -540,7 +642,7 @@ func main() {
 	// Parse the flags
 	flag.Parse()
 
-	if err := run(hostname, kubeconfig, netdev, objPath); err != nil {
+	if err := run(hostname, kubeconfig, hostNetdev, containerNetdev, objPath); err != nil {
 		slog.Error("Error running oncache", slog.Any("error", err))
 		os.Exit(1)
 	}
