@@ -68,14 +68,12 @@ struct {
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } filter_cache SEC(".maps");
 
-// Interface map: interface index -> (MAC address, IP address)
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __type(key, __u32);
-    __type(value, struct interface_data);
-    __uint(max_entries, INTERFACE_MAP_SIZE);
-    __uint(pinning, LIBBPF_PIN_BY_NAME);
-} interface_map SEC(".maps");
+// Host interface: (MAC address, IP address)
+// See (globals): https://ebpf-go.dev/concepts/global-variables/#global-variables
+volatile struct interface_data host_interface = {
+    .mac = {0},
+    .ip = 0,
+};
 
 // Egress init hook
 // Attached to outgoing packets, host interface
@@ -430,19 +428,16 @@ int ingress(struct __sk_buff *skb) {
     /** BEGIN: Step 1: Destination Check */
     /** BEGIN: Interface Validation */
     // Get the interface data
-    __u32 ifindex = skb->ifindex;
-    struct interface_data *interface_data =
-        bpf_map_lookup_elem(&interface_map, &ifindex);
-    if (!interface_data) {
-        ERROR_PRINT("Interface data not found for ifindex: %u\n", ifindex);
+    if (host_interface.ip == 0) {
+        DEBUG_PRINT("Host interface not initialized\n");
         return TC_ACT_OK;
     }
     // Check if the packet matches the interface data
-    if (!equal_buf(interface_data->mac, headers->outer.eth.h_dest, ETH_ALEN)) {
+    if (!equal_buf(host_interface.mac, headers->outer.eth.h_dest, ETH_ALEN)) {
         DEBUG_PRINT("Packet does not match interface eth address\n");
         return TC_ACT_OK;
     }
-    if (interface_data->ip != headers->outer.ip.daddr) {
+    if (host_interface.ip != headers->outer.ip.daddr) {
         DEBUG_PRINT("Packet does not match interface IP address\n");
         return TC_ACT_OK;
     }

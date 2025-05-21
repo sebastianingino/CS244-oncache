@@ -154,7 +154,7 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
 }
 
 // Check if two buffers are equal
-static inline bool_t equal_buf(__u8 *buf1, __u8 *buf2, __u32 len) {
+static inline bool_t equal_buf(volatile __u8 *buf1, volatile __u8 *buf2, __u32 len) {
     for (__u32 i = 0; i < len; i++) {
         if (buf1[i] != buf2[i]) {
             return false;

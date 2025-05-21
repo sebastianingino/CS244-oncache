@@ -154,20 +154,17 @@ func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface) er
 	return nil
 }
 
-func addInterface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
-	// Check if map exists
-	if interfaceMap == nil {
-		return fmt.Errorf("map or spec is nil")
+func setInterface(hostInterface *ebpf.Variable, netdev *net.Interface) error {
+	// Check if variable exists
+	if hostInterface == nil {
+		return fmt.Errorf("variable or spec is nil")
 	}
 
-	// Map value struct
+	// Value struct
 	type InterfaceData struct {
 		Mac [6]byte
 		Ip  uint32
 	}
-
-	// Get key
-	interface_index := uint32(netdev.Index)
 
 	// Get values for struct
 	if len(netdev.HardwareAddr) != 6 {
@@ -196,8 +193,8 @@ func addInterface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
 		Ip:  binary.BigEndian.Uint32(ipv4),
 	}
 
-	// Add to interface map
-	if err := interfaceMap.Put(interface_index, value); err != nil {
+	// Set variable
+	if err := hostInterface.Set(value); err != nil {
 		return fmt.Errorf("failed adding value to map: %v", err)
 	}
 
@@ -205,7 +202,6 @@ func addInterface(interfaceMap *ebpf.Map, netdev *net.Interface) error {
 }
 
 func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules []string) error {
-
 	// Get the antrea-agent pods
 	pods, err := clientset.CoreV1().Pods("kube-system").List(context.Background(), metav1.ListOptions{
 		FieldSelector: "status.phase=Running",
@@ -462,9 +458,9 @@ func run(hostname, kubeconfig, netdev, objPath *string) error {
 		return fmt.Errorf("could not load ingress program: %v", err)
 	}
 
-	// Populate interface_map with host information
-	if err := addInterface(coll.Maps["interface_map"], host); err != nil {
-		return fmt.Errorf("failed to add host interface to interface_map: %v", err)
+	// Populate host_interface with host information
+	if err := setInterface(coll.Variables["host_interface"], host); err != nil {
+		return fmt.Errorf("failed to add host interface to host_interface: %v", err)
 	}
 
 	// Set up the egress rules
