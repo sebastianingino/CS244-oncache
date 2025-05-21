@@ -23,6 +23,7 @@ import (
 	"github.com/florianl/go-tc/core"
 	"github.com/lmittmann/tint"
 	"github.com/mdlayher/netlink"
+	nl "github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
@@ -311,7 +312,10 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 		return 0, fmt.Errorf("could not load container program: %v", err)
 	}
 
-	return netInterface.Index, nil
+	// Get the parent link index
+	nlInterface, _ := nl.LinkByName(*containerNetdev)
+
+	return nlInterface.ParentIndex, nil
 }
 
 func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
@@ -321,6 +325,17 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 		return fmt.Errorf("ingress_cache map not found")
 	}
 
+	// Get the pod IP as key
+	ip := net.ParseIP(pod.Status.PodIP)
+	if ip == nil {
+		return fmt.Errorf("failed to parse pod IP: %v", pod.Status.PodIP)
+	}
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return fmt.Errorf("failed to convert pod IP to v4: %v", pod.Status.PodIP)
+	}
+
+	// Add the pod veth index to the ingress map
 	type IngressData struct {
 		VethIdx uint32
 		Ethhdr  [14]byte
@@ -329,7 +344,9 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	data := IngressData{
 		VethIdx: uint32(vethIdx),
 	}
-	if err := ingressMap.Put(pod.UID, data); err != nil {
+
+	// Convert the IP to a uint32 for the map key
+	if err := ingressMap.Put(binary.BigEndian.Uint32(ipv4), data); err != nil {
 		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
 	}
 
@@ -370,6 +387,7 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	if err != nil {
 		return fmt.Errorf("failed to load container plugin: %v", err)
 	}
+	slog.Debug("Loaded container plugin", slog.Any("vethIdx", vethIdx))
 
 	// Get the veth interface
 	veth, err := net.InterfaceByIndex(vethIdx)
