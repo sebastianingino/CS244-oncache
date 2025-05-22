@@ -155,7 +155,7 @@ int egress_init(struct __sk_buff *skb) {
     // Add mapping (container destination IP -> host destination IP) to the
     // egress cache L1
     err = bpf_map_update_elem(&egress_host_cache, &container_dst_ip,
-                              &host_dst_ip, BPF_NOEXIST);
+                              &host_dst_ip, BPF_ANY);
     if (err) {
         ERROR_PRINT("(egress_init) Failed to update egress_host_cache: %d",
                     err);
@@ -167,8 +167,7 @@ int egress_init(struct __sk_buff *skb) {
 
     // Add mapping (host destination IP -> (outer headers, inner MAC header,
     // ifindex)) to the egress cache L2
-    err = bpf_map_update_elem(&egress_data_cache, &host_dst_ip, &data,
-                              BPF_NOEXIST);
+    err = bpf_map_update_elem(&egress_data_cache, &host_dst_ip, &data, BPF_ANY);
     if (err) {
         ERROR_PRINT("(egress_init) Failed to update egress_data_cache: %d",
                     err);
@@ -285,8 +284,8 @@ int egress(struct __sk_buff *skb) {
         bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
     // Update the IP length and checksum
     __u16 old_len = outer->ip.tot_len;
-    __u16 new_len = skb->len - sizeof(struct ethhdr);
-    outer->ip.tot_len = bpf_htons(new_len);
+    __u16 new_len = bpf_htons(skb->len - sizeof(struct ethhdr));
+    outer->ip.tot_len = new_len;
     // L3 checksum replacement is incremental
     // See: https://docs.ebpf.io/linux/helper-function/bpf_l3_csum_replace/
     // Note: this makes me sad
