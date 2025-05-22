@@ -1,6 +1,7 @@
 from kubernetes import client, config, watch
 import subprocess
 from typing import List, Optional, TypedDict
+import time
 
 from shared.config import BenchType, BenchmarkConfig, get_benchmark_config
 from shared.util import exp_range
@@ -94,6 +95,8 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
                 "ip": pod.status.pod_ip,
             }
         )
+
+    time.sleep(20)
 
     return {
         "clients": client_pods,

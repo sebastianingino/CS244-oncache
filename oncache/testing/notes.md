@@ -74,3 +74,25 @@ To remove the filter, we can use the following command:
 ```bash
 sudo tc filter del dev dummy0 egress
 ```
+
+### Logs
+
+You can read the log pipe with the following command:
+
+```bash
+sudo cat /sys/kernel/debug/tracing/trace_pipe
+```
+
+### Print maps
+
+You can list the pinned eBPF maps using the following command:
+
+```bash
+sudo ls /sys/fs/bpf/tc/globals/
+```
+
+You can read the maps using the following command:
+
+```bash
+sudo cat /sys/fs/bpf/tc/globals/MY_MAP
+```
