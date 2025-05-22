@@ -661,7 +661,7 @@ func main() {
 	// Set up logging
 	slog.SetDefault(slog.New(
 		tint.NewHandler(os.Stderr, &tint.Options{
-			Level:      slog.LevelDebug,
+			Level:      slog.LevelInfo,
 			TimeFormat: time.Kitchen,
 		}),
 	))
