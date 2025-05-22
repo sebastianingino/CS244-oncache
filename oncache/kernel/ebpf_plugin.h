@@ -132,7 +132,7 @@ static bool_t is_encap_pkt(encap_headers_t *headers) {
 // See https://en.wikipedia.org/wiki/Type_of_service#DSCP_and_ECN
 static bool_t __attribute__((always_inline)) has_mark(inner_headers_t *inner,
                                                       __u8 marker) {
-    INFO_PRINT("(has_mark) inner->ip.tos: %u", inner->ip.tos);
+    DEBUG_PRINT("(has_mark) inner->ip.tos: %u", inner->ip.tos);
     return inner->ip.tos & marker;
 }
 
@@ -154,7 +154,7 @@ static void mark(struct __sk_buff *skb, __u32 inner_offset, __u8 marker,
         return;
     }
 
-    INFO_PRINT("(mark) Marked packet {old: %u, new: %u}", old_tos, new_tos);
+    DEBUG_PRINT("(mark) Marked packet {old: %u, new: %u}", old_tos, new_tos);
 
     // Update the IP checksum
     bpf_l3_csum_replace(
