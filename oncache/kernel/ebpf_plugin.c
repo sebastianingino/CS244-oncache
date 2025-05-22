@@ -161,7 +161,7 @@ int egress_init(struct __sk_buff *skb) {
                     err);
         return TC_ACT_OK;
     } else {
-        INFO_PRINT("(egress_init) Updated egress_host_cache: %u -> %u",
+        DEBUG_PRINT("(egress_init) Updated egress_host_cache: %u -> %u",
                    container_dst_ip, host_dst_ip);
     }
 
@@ -173,7 +173,7 @@ int egress_init(struct __sk_buff *skb) {
                     err);
         return TC_ACT_OK;
     } else {
-        INFO_PRINT("(egress_init) Updated egress_data_cache: %u -> egress_data",
+        DEBUG_PRINT("(egress_init) Updated egress_data_cache: %u -> egress_data",
                    host_dst_ip);
     }
     /** END: Cache Initialization */
@@ -216,7 +216,7 @@ int egress(struct __sk_buff *skb) {
     addr_t *host_dst_ip =
         bpf_map_lookup_elem(&egress_host_cache, &headers->ip.daddr);
     if (!host_dst_ip) {
-        INFO_PRINT(
+        DEBUG_PRINT(
             "(egress) Host destination IP %u not found in egress_host_cache",
             headers->ip.daddr);
         mark(skb, 0, MISSED_MARK, 1);
@@ -226,7 +226,7 @@ int egress(struct __sk_buff *skb) {
     struct egress_data *data =
         bpf_map_lookup_elem(&egress_data_cache, host_dst_ip);
     if (!data) {
-        INFO_PRINT("(egress) Egress data not found for host destination IP: %u",
+        DEBUG_PRINT("(egress) Egress data not found for host destination IP: %u",
                    *host_dst_ip);
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
@@ -234,12 +234,12 @@ int egress(struct __sk_buff *skb) {
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
-        INFO_PRINT("(egress) Filter action not found for flow key");
+        DEBUG_PRINT("(egress) Filter action not found for flow key");
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     if (!action->egress || !action->ingress) {
-        INFO_PRINT("(egress) Filter action not allowed: ingress=%u, egress=%u",
+        DEBUG_PRINT("(egress) Filter action not allowed: ingress=%u, egress=%u",
                    action->ingress, action->egress);
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
@@ -471,12 +471,12 @@ int ingress(struct __sk_buff *skb) {
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
-        INFO_PRINT("(ingress) Filter action not found for flow key");
+        DEBUG_PRINT("(ingress) Filter action not found for flow key");
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
     }
     if (!action->ingress || !action->egress) {
-        INFO_PRINT("(ingress) Filter action not allowed: ingress=%u, egress=%u",
+        DEBUG_PRINT("(ingress) Filter action not allowed: ingress=%u, egress=%u",
                    action->ingress, action->egress);
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
@@ -487,7 +487,7 @@ int ingress(struct __sk_buff *skb) {
     addr_t *host_dst_ip =
         bpf_map_lookup_elem(&egress_host_cache, &headers->inner.ip.saddr);
     if (!host_dst_ip) {
-        INFO_PRINT(
+        DEBUG_PRINT(
             "(ingress) Host destination IP not found in egress_host_cache: %u",
             headers->inner.ip.saddr);
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
