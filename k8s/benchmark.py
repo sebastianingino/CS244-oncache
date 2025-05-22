@@ -96,7 +96,7 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
             }
         )
 
-    time.sleep(10)
+    time.sleep(20)
 
     return {
         "clients": client_pods,
