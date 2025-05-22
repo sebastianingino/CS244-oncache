@@ -81,7 +81,7 @@ struct flow_key {
     __u32 dst_ip;
     __u16 dst_port;
     __u8 protocol;
-};
+} __attribute__((packed));
 
 // Filter action: ingress and egress allow (1) or deny (0)
 struct filter_action {
@@ -171,7 +171,7 @@ static void mark(struct __sk_buff *skb, __u32 inner_offset, __u8 marker,
 // Convert inner headers to flow key
 // See https://datatracker.ietf.org/doc/html/rfc791#section-3.1
 static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
-                          struct flow_key *key) {
+                          struct flow_key *key, bool_t egress) {
     // Check if the inner header is valid
     if (headers->eth.h_proto != bpf_htons(ETH_P_IP)) {
         DEBUG_PRINT("(to_flow_key) Not an IP packet {eth_proto: %d}",
@@ -179,8 +179,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         return false;
     }
 
-    key->src_ip = headers->ip.saddr;
-    key->dst_ip = headers->ip.daddr;
+    key->src_ip = egress ? headers->ip.saddr : headers->ip.daddr;
+    key->dst_ip = egress ? headers->ip.daddr : headers->ip.saddr;
     key->protocol = headers->ip.protocol;
     // Check if the packet is long enough
     switch (headers->ip.protocol) {
@@ -192,8 +192,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
             }
             struct tcphdr *tcp_hdr =
                 (struct tcphdr *)((__u8 *)headers + sizeof(inner_headers_t));
-            key->src_port = tcp_hdr->source;
-            key->dst_port = tcp_hdr->dest;
+            key->src_port = egress ? tcp_hdr->source : tcp_hdr->dest;
+            key->dst_port = egress ? tcp_hdr->dest : tcp_hdr->source;
             break;
         case IPPROTO_UDP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
@@ -203,8 +203,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
             }
             struct udphdr *udp_hdr =
                 (struct udphdr *)((__u8 *)headers + sizeof(inner_headers_t));
-            key->src_port = udp_hdr->source;
-            key->dst_port = udp_hdr->dest;
+            key->src_port = egress ? udp_hdr->source : udp_hdr->dest;
+            key->dst_port = egress ? udp_hdr->dest : udp_hdr->source;
             break;
         default:
             DEBUG_PRINT("(to_flow_key) Not a TCP or UDP packet {ip_proto: %d}",

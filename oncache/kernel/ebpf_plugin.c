@@ -99,7 +99,7 @@ int egress_init(struct __sk_buff *skb) {
 
     // Get flow key and check if inner packet is long enough
     struct flow_key key;
-    if (!to_flow_key(&headers->inner, skb, &key)) {
+    if (!to_flow_key(&headers->inner, skb, &key, true)) {
         DEBUG_PRINT("(egress_init) Failed to create flow key: %d",
                     headers->inner.ip.protocol);
         return TC_ACT_OK;
@@ -204,7 +204,7 @@ int egress(struct __sk_buff *skb) {
 
     // Get flow key and check if the packet is long enough
     struct flow_key key;
-    if (!to_flow_key(headers, skb, &key)) {
+    if (!to_flow_key(headers, skb, &key, true)) {
         DEBUG_PRINT("(egress) Failed to create flow key: %d",
                     headers->ip.protocol);
         return TC_ACT_OK;
@@ -337,7 +337,7 @@ int ingress_init(struct __sk_buff *skb) {
 
     // Get flow key and check if the packet is long enough
     struct flow_key key;
-    if (!to_flow_key(headers, skb, &key)) {
+    if (!to_flow_key(headers, skb, &key, false)) {
         DEBUG_PRINT("(ingress_init) Failed to create flow key: %d",
                     headers->ip.protocol);
         return TC_ACT_OK;
@@ -428,7 +428,7 @@ int ingress(struct __sk_buff *skb) {
 
     // Get flow key and check if the inner packet is long enough
     struct flow_key key;
-    if (!to_flow_key(&headers->inner, skb, &key)) {
+    if (!to_flow_key(&headers->inner, skb, &key, false)) {
         DEBUG_PRINT("(ingress) Failed to create flow key: %d",
                     headers->inner.ip.protocol);
         return TC_ACT_OK;
