@@ -129,9 +129,32 @@ int egress_init(struct __sk_buff *skb) {
         .ifindex = skb->ifindex,
     };
 
+    // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
+    // (ingress action, egress action) to the filter cache
+    // Note: this must be done first since future actions can only be done once
+    struct filter_action action = {
+        .ingress = 0,
+        .egress = 1,
+    };
+    int err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
+    if (err) {
+        // If the entry already exists, update the egress action
+        struct filter_action *existing_action =
+            bpf_map_lookup_elem(&filter_cache, &key);
+        if (existing_action) {
+            existing_action->egress = 1;
+            DEBUG_PRINT("(egress_init) Updated filter_cache");
+        } else {
+            ERROR_PRINT("(egress_init) Failed to update filter_cache: %d", err);
+            return TC_ACT_OK;
+        }
+    } else {
+        DEBUG_PRINT("(egress_init) Updated filter_cache");
+    }
+
     // Add mapping (container destination IP -> host destination IP) to the
     // egress cache L1
-    int err = bpf_map_update_elem(&egress_host_cache, &container_dst_ip,
+    err = bpf_map_update_elem(&egress_host_cache, &container_dst_ip,
                                   &host_dst_ip, BPF_NOEXIST);
     if (err) {
         ERROR_PRINT("(egress_init) Failed to update egress_host_cache: %d",
@@ -153,28 +176,6 @@ int egress_init(struct __sk_buff *skb) {
     } else {
         INFO_PRINT("(egress_init) Updated egress_data_cache: %u -> egress_data",
                    host_dst_ip);
-    }
-
-    // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
-    // (ingress action, egress action) to the filter cache
-    struct filter_action action = {
-        .ingress = 0,
-        .egress = 1,
-    };
-    err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
-    if (err) {
-        // If the entry already exists, update the egress action
-        struct filter_action *existing_action =
-            bpf_map_lookup_elem(&filter_cache, &key);
-        if (existing_action) {
-            existing_action->egress = 1;
-            DEBUG_PRINT("(egress_init) Updated filter_cache");
-        } else {
-            ERROR_PRINT("(egress_init) Failed to update filter_cache: %d", err);
-            return TC_ACT_OK;
-        }
-    } else {
-        DEBUG_PRINT("(egress_init) Updated filter_cache");
     }
     /** END: Cache Initialization */
 
