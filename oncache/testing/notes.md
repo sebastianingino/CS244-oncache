@@ -85,8 +85,14 @@ sudo cat  /sys/kernel/debug/tracing/trace_pipe
 
 ### Print maps
 
-You can print the pinned eBPF maps using the following command:
+You can list the pinned eBPF maps using the following command:
 
 ```bash
-sudo bpftool map dump pinned /sys/fs/bpf/ebpf_plugin/ebpf_plugin/maps
+sudo ls /sys/fs/bpf/tc/globals/
+```
+
+You can read the maps using the following command:
+
+```bash
+sudo cat /sys/fs/bpf/tc/globals/MY_MAP
 ```

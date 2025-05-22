@@ -14,12 +14,24 @@
 #include <linux/tcp.h>
 #include <linux/udp.h>
 
+#ifdef DEBUG
+#define DEBUG_PRINT(...) bpf_printk("[DEBUG] " __VA_ARGS__)
+#else
+#define DEBUG_PRINT(...) \
+    {                    \
+    }
+#endif
+#define INFO_PRINT(...) bpf_printk("[INFO] " __VA_ARGS__)
+#define ERROR_PRINT(...) bpf_printk("[ERROR] " __VA_ARGS__)
+
 typedef __be32 addr_t;
 typedef __u8 bool_t;
 #define true 1
 #define false 0
 
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
+// Note: it's probably ok for GENEVE assuming no variable-length options
+// See https://datatracker.ietf.org/doc/html/rfc8926#section-3.1
 #define VXLAN_HEADER_LEN 8
 
 // Outer header structure: Ethernet + IP + UDP + VXLAN
@@ -93,29 +105,67 @@ static bool_t is_vxlan_port(__u16 port) {
 // See https://datatracker.ietf.org/doc/html/rfc8926#section-3.1
 static bool_t is_geneve_port(__u16 port) { return port == bpf_htons(6081); }
 
-// Check if packet is a VXLAN packet
+// Check if packet is a VXLAN or GENEVE packet
 // See https://datatracker.ietf.org/doc/html/rfc7348#section-5
-static bool_t is_vxlan_pkt(encap_headers_t *headers) {
-    return headers->outer.eth.h_proto == bpf_htons(ETH_P_IP) &&
-           headers->outer.ip.protocol == IPPROTO_UDP &&
-           (is_vxlan_port(headers->outer.udp.dest) ||
-            is_geneve_port(headers->outer.udp.dest));
+//     https://datatracker.ietf.org/doc/html/rfc8926#section-3.1
+static bool_t is_encap_pkt(encap_headers_t *headers) {
+    if (headers->outer.eth.h_proto != bpf_htons(ETH_P_IP)) {
+        DEBUG_PRINT("(is_encap_pkt) Not an IP packet {eth_proto: %d}",
+                    headers->outer.eth.h_proto);
+        return false;
+    }
+    if (headers->outer.ip.protocol != IPPROTO_UDP) {
+        DEBUG_PRINT("(is_encap_pkt) Not a UDP packet {ip_proto: %d}",
+                    headers->outer.ip.protocol);
+        return false;
+    }
+    if (!is_vxlan_port(headers->outer.udp.dest) &&
+        !is_geneve_port(headers->outer.udp.dest)) {
+        DEBUG_PRINT("(is_encap_pkt) Not a VXLAN or GENEVE packet {port: %d}",
+                    bpf_ntohs(headers->outer.udp.dest));
+        return false;
+    }
+    return true;
 }
 
 // Check if packet was marked as missed
 // See https://en.wikipedia.org/wiki/Type_of_service#DSCP_and_ECN
-static bool_t has_mark(inner_headers_t *inner, __u8 marker) {
+static bool_t __attribute__((always_inline)) has_mark(inner_headers_t *inner,
+                                                      __u8 marker) {
+    INFO_PRINT("(has_mark) inner->ip.tos: %u", inner->ip.tos);
     return inner->ip.tos & marker;
 }
 
 // Mark packet as missed
 // See https://en.wikipedia.org/wiki/Type_of_service#DSCP_and_ECN
-static void mark(inner_headers_t *inner, __u8 marker, bool_t set) {
-    if (set) {
-        inner->ip.tos |= marker;
-    } else {
-        inner->ip.tos &= ~marker;
+static void mark(struct __sk_buff *skb, __u32 inner_offset, __u8 marker,
+                 bool_t set) {
+    __u32 eth_offset = inner_offset + sizeof(struct ethhdr);
+    __u32 tos_offset = eth_offset + offsetof(struct iphdr, tos);
+
+    __u8 old_tos;
+    if (bpf_skb_load_bytes(skb, tos_offset, &old_tos, sizeof(__u8)) < 0) {
+        ERROR_PRINT("(mark) Failed to load old TOS");
+        return;
     }
+    __u8 new_tos = set ? old_tos | marker : old_tos & ~marker;
+    if (bpf_skb_store_bytes(skb, tos_offset, &new_tos, sizeof(__u8), 0) < 0) {
+        ERROR_PRINT("(mark) Failed to store new TOS");
+        return;
+    }
+
+    INFO_PRINT("(mark) Marked packet {old: %u, new: %u}", old_tos, new_tos);
+
+    // Update the IP checksum
+    bpf_l3_csum_replace(
+        skb, eth_offset + offsetof(struct iphdr, check), bpf_htons(old_tos),
+        bpf_htons(new_tos),
+        2);  // Note: 2 bytes because that's the minimum size See:
+             // https://docs.ebpf.io/linux/helper-function/bpf_l3_csum_replace/
+
+    // Mark hash as invalid
+    // See: https://docs.ebpf.io/linux/helper-function/bpf_set_hash_invalid/
+    bpf_set_hash_invalid(skb);
 }
 
 // Convert inner headers to flow key
@@ -124,6 +174,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
                           struct flow_key *key) {
     // Check if the inner header is valid
     if (headers->eth.h_proto != bpf_htons(ETH_P_IP)) {
+        DEBUG_PRINT("(to_flow_key) Not an IP packet {eth_proto: %d}",
+                    headers->eth.h_proto);
         return false;
     }
 
@@ -135,6 +187,7 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         case IPPROTO_TCP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
                                     sizeof(struct tcphdr)) {
+                DEBUG_PRINT("(to_flow_key) Too short for TCP packet");
                 return false;
             }
             struct tcphdr *tcp_hdr =
@@ -145,6 +198,7 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         case IPPROTO_UDP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
                                     sizeof(struct udphdr)) {
+                DEBUG_PRINT("(to_flow_key) Too short for UDP packet");
                 return false;
             }
             struct udphdr *udp_hdr =
@@ -153,6 +207,8 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
             key->dst_port = udp_hdr->dest;
             break;
         default:
+            DEBUG_PRINT("(to_flow_key) Not a TCP or UDP packet {ip_proto: %d}",
+                        headers->ip.protocol);
             return false;
     }
 

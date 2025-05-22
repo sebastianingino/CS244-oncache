@@ -23,7 +23,8 @@ import (
 	"github.com/florianl/go-tc/core"
 	"github.com/lmittmann/tint"
 	"github.com/mdlayher/netlink"
-	nl "github.com/vishvananda/netlink"
+	vnl "github.com/vishvananda/netlink"
+	"github.com/vishvananda/netlink/nl"
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
@@ -124,7 +125,7 @@ func loadProgram(prog *ebpf.Program, direction uint32, netdev *net.Interface, tc
 
 	// Attach the eBPF program to the network device
 	fd := uint32(prog.FD())
-	flags := uint32(0)
+	flags := uint32(nl.TCA_BPF_FLAG_ACT_DIRECT)
 
 	filter := tc.Object{
 		Msg: tc.Msg{
@@ -186,7 +187,7 @@ func setInterface(hostInterface *ebpf.Variable, netdev *net.Interface) error {
 	// Populate struct
 	value := InterfaceData{
 		Mac: [6]byte(netdev.HardwareAddr),
-		Ip:  binary.BigEndian.Uint32(ipv4),
+		Ip:  binary.NativeEndian.Uint32(ipv4),
 	}
 
 	// Set variable
@@ -315,7 +316,7 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 	}
 
 	// Get the parent link index
-	nlInterface, _ := nl.LinkByIndex(netInterface.Index)
+	nlInterface, _ := vnl.LinkByIndex(netInterface.Index)
 
 	return nlInterface.Attrs().ParentIndex, nil
 }
@@ -348,11 +349,11 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	}
 
 	// Convert the IP to a uint32 for the map key
-	if err := ingressMap.Put(binary.BigEndian.Uint32(ipv4), data); err != nil {
+	if err := ingressMap.Put(binary.NativeEndian.Uint32(ipv4), data); err != nil {
 		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
 	}
 
-	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.BigEndian.Uint32(ipv4)), slog.Any("value", data))
+	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)), slog.Any("value", data))
 
 	return nil
 }
@@ -422,7 +423,8 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	}
 
 	// Load the egress program on the veth interface
-	if err := loadProgram(coll.Programs["egress"], tc.HandleMinEgress, veth, tcnl); err != nil {
+	// Note: this is an ingress program as the packets enter from the container to the veth interface
+	if err := loadProgram(coll.Programs["egress"], tc.HandleMinIngress, veth, tcnl); err != nil {
 		return fmt.Errorf("could not load veth program: %v", err)
 	}
 
