@@ -39,6 +39,11 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "Cilium",
         "color": "green",
     },
+    "k8s-oncache": {
+        "filename": "results/{}_k8s_output_oncache.csv",
+        "label": "ONCache",
+        "color": "red",
+    }
 }
 
 GRAPHS: List[Graph] = [
