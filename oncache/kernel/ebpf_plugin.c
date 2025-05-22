@@ -107,15 +107,15 @@ int egress_init(struct __sk_buff *skb) {
 
     // Check if the packet is marked as missed
     if (!has_mark(&headers->inner, MISSED_MARK)) {
-        INFO_PRINT("(egress_init) Packet to %u not marked as missed: %u",
-                   headers->inner.ip.daddr, headers->inner.ip.tos);
+        DEBUG_PRINT("(egress_init) Packet to %u not marked as missed: %u",
+                    headers->inner.ip.daddr, headers->inner.ip.tos);
         return TC_ACT_OK;
     }
 
     // Check if the packet is marked as established
     if (!has_mark(&headers->inner, EST_MARK)) {
-        INFO_PRINT("(egress_init) Packet to %u not marked as established: %u",
-                   headers->inner.ip.daddr, headers->inner.ip.tos);
+        DEBUG_PRINT("(egress_init) Packet to %u not marked as established: %u",
+                    headers->inner.ip.daddr, headers->inner.ip.tos);
         return TC_ACT_OK;
     }
     /** END: Packet Validation */
@@ -155,7 +155,7 @@ int egress_init(struct __sk_buff *skb) {
     // Add mapping (container destination IP -> host destination IP) to the
     // egress cache L1
     err = bpf_map_update_elem(&egress_host_cache, &container_dst_ip,
-                                  &host_dst_ip, BPF_NOEXIST);
+                              &host_dst_ip, BPF_NOEXIST);
     if (err) {
         ERROR_PRINT("(egress_init) Failed to update egress_host_cache: %d",
                     err);
@@ -345,12 +345,15 @@ int ingress_init(struct __sk_buff *skb) {
 
     // Check if the packet is marked as missed
     if (!has_mark(headers, MISSED_MARK)) {
-        INFO_PRINT("(ingress_init) Packet not marked as missed");
+        DEBUG_PRINT("(ingress_init) Packet from %u not marked as missed: %u",
+                    headers->ip.saddr, headers->ip.tos);
         return TC_ACT_OK;
     }
     // Check if the packet is marked as established
     if (!has_mark(headers, EST_MARK)) {
-        INFO_PRINT("(ingress_init) Packet not marked as established");
+        DEBUG_PRINT(
+            "(ingress_init) Packet from %u not marked as established: %u",
+            headers->ip.saddr, headers->ip.tos);
         return TC_ACT_OK;
     }
     /** END: Packet Validation */

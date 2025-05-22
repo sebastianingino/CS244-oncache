@@ -14,7 +14,7 @@ spec:
       labels:
         app: client-netperf
     spec:
-      terminationGracePeriodSeconds: 0
+      terminationGracePeriodSeconds: 1
       containers:
         - name: client-netperf
           image: networkstatic/netperf

@@ -14,7 +14,7 @@ spec:
       labels:
         app: client-iperf
     spec:
-      terminationGracePeriodSeconds: 0
+      terminationGracePeriodSeconds: 1
       containers:
         - name: client-iperf
           image: networkstatic/iperf3
