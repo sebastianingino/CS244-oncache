@@ -80,7 +80,7 @@ sudo tc filter del dev dummy0 egress
 You can read the log pipe with the following command:
 
 ```bash
-sudo cat  /sys/kernel/debug/tracing/trace_pipe
+sudo cat /sys/kernel/debug/tracing/trace_pipe
 ```
 
 ### Print maps
