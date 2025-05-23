@@ -13,25 +13,35 @@ def run_client_iperf(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        cmd = [
-            "iperf3",
-            "-c",
-            destination,
-            "-p",  # Port number to connect to the server
-            str(benchmark_config["port_start"]),
-            "-t",  # Duration of the test in seconds
-            str(benchmark_config["duration"]),
-            "-P",  # Number of parallel client streams
-            str(n_flows),
-            "--logfile",
-            f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows.json",
-            "--json",  # Output in JSON format for easier parsing
-        ]
-        if bench_type == BenchType.UDP:
-            cmd.append("-u")  # UDP test
-            cmd.append("-b")  # Bitrate limit
-            cmd.append("0")   # No limit
-        subprocess.run(cmd, check=True)
+        procs = []
+        for i in range(n_flows):
+            cmd = [
+                "iperf3",
+                "-c",
+                destination,
+                "-p",  # Port number to connect to the server
+                str(benchmark_config["port_start"] + i),
+                "-t",  # Duration of the test in seconds
+                str(benchmark_config["duration"]),
+                "-P",  # Number of parallel client streams
+                str(n_flows),
+                "--logfile",
+                f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
+                "--json",  # Output in JSON format for easier parsing
+            ]
+            if bench_type == BenchType.UDP:
+                cmd.append("-u")  # UDP test
+                cmd.append("-b")  # Bitrate limit
+                cmd.append("0")  # No limit
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            procs.append(p)
+        for p in procs:
+            p.wait()
+            if p.returncode != 0:
+                print(
+                    f"Error in iperf3 for {n_flows} flows: {p.stderr.read().decode()}"
+                )
+        print(f"iperf3 completed successfully for {n_flows} flows.")
     print(f"iperf3 {bench_type.value} throughput benchmark completed for all flows.")
 
 
@@ -78,47 +88,60 @@ def run_client_netperf(
 
 
 def run_client(
-    benchmark_config: BenchmarkConfig, destination: str, bench_type: Optional[BenchType]
+    benchmark_config: BenchmarkConfig,
+    destination: str,
+    bench_type: Optional[BenchType],
+    test: Optional[str] = None,
 ):
-    # iperf Throughput Benchmark
-    if bench_type is None:
-        for bt in BenchType:
-            run_client_iperf(benchmark_config, destination, bt)
-    else:
-        run_client_iperf(benchmark_config, destination, bench_type)
+    if test is None or test == "throughput":
+        # iperf Throughput Benchmark
+        if bench_type is None:
+            for bt in BenchType:
+                run_client_iperf(benchmark_config, destination, bt)
+        else:
+            run_client_iperf(benchmark_config, destination, bench_type)
 
-    input("Press Enter to continue to the next benchmark...")
+    if test is None:
+        input("Press Enter to continue to the next benchmark...")
 
-    # netperf RR Benchmark
-    if bench_type is None:
-        for bt in BenchType:
-            run_client_netperf(benchmark_config, destination, bt)
-    else:
-        run_client_netperf(benchmark_config, destination, bench_type)
+    if test is None or test == "latency":
+        # netperf Latency Benchmark
+        if bench_type is None:
+            for bt in BenchType:
+                run_client_netperf(benchmark_config, destination, bt)
+        else:
+            run_client_netperf(benchmark_config, destination, bench_type)
 
 
-def run_server(benchmark_config: BenchmarkConfig):
+def run_server_iperf(benchmark_config: BenchmarkConfig):
+    print("Running iperf3 server")
     # iperf3 throughput benchmark
-    cmd = [
-        "iperf3",
-        "-s",
-        "-p",
-        str(benchmark_config["port_start"]),
-        "--logfile",
-        "logs/baremetal/server_log_throughput_flows.json",
-        "--json",  # Output in JSON format for easier parsing
-    ]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
+    procs = []
+    for i in range(benchmark_config["max_flows"]):
+        cmd = [
+            "iperf3",
+            "-s",
+            "-p",
+            str(benchmark_config["port_start"] + i),
+            "--logfile",
+            f"logs/baremetal/server_log_throughput_{i}_flows.json",
+            "--json",  # Output in JSON format for easier parsing
+        ]
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        procs.append(p)
     input("Press Enter when finished with iperf...")
-    p.terminate()
-    p.wait()
-    # Check if the process is still running and terminate it
-    if p.poll() is None:
+    for p in procs:
         p.terminate()
         p.wait()
+        # Check if the process is still running and terminate it
+        if p.poll() is None:
+            p.terminate()
+            p.wait()
     print("iperf3 server terminated successfully.")
 
+
+def run_server_netperf(benchmark_config: BenchmarkConfig):
+    print("Running netserver")
     # netperf rr benchmark
     cmd = [
         "netserver",
@@ -137,43 +160,56 @@ def run_server(benchmark_config: BenchmarkConfig):
     print("netserver terminated successfully.")
 
 
-def run_benchmark(bench_type: Optional[BenchType] = None):
+def run_server(benchmark_config: BenchmarkConfig, test: Optional[str] = None):
+    if test is None:
+        run_server_iperf(benchmark_config)
+        run_server_netperf(benchmark_config)
+    elif test == "latency":
+        # netserver rr benchmark
+        run_server_netperf(benchmark_config)
+    elif test == "throughput":
+        # iperf3 throughput benchmark
+        run_server_iperf(benchmark_config)
+
+
+def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = None):
     general_config = get_benchmark_config()
     spec_config = load_config("config/baremetal.toml")
 
     # Clear logs
     for b in [bench_type] if bench_type else BenchType:
-        subprocess.run(
-            ["mkdir", "-p", f"logs/baremetal/{b.value.lower()}"],
-            check=True,
-        )
-        subprocess.run(
-            [
-                "find",
-                f"logs/baremetal/{b.value.lower()}",
-                "-name",
-                "*.json",
-                "-delete",
-            ],
-            check=True,
-        )
-        subprocess.run(
-            [
-                "find",
-                f"logs/baremetal/{b.value.lower()}",
-                "-name",
-                "*.txt",
-                "-delete",
-            ],
-            check=True,
-        )
+        for t in [test] if test else ["latency", "throughput"]:
+            subprocess.run(
+                ["mkdir", "-p", f"logs/baremetal/{b.value.lower()}"],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "find",
+                    f"logs/baremetal/{b.value.lower()}",
+                    "-name",
+                    f"*_{t}_*.json",
+                    "-delete",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "find",
+                    f"logs/baremetal/{b.value.lower()}",
+                    "-name",
+                    f"*_{t}_*.txt",
+                    "-delete",
+                ],
+                check=True,
+            )
 
     role = get_role()
     if role == "primary":
         destination = spec_config["node"]["secondary"]["ip"]
-        run_client(general_config, destination, bench_type)
+        run_client(general_config, destination, bench_type, test)
     elif role == "secondary":
-        run_server(general_config)
+        run_server(general_config, test)
     else:
         raise ValueError(f"Unknown role: {role}. Expected 'primary' or 'secondary'.")
 

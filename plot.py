@@ -25,22 +25,22 @@ Graph = TypedDict(
 
 DATA_CONFIG: Dict[str, DataConfig] = {
     "baremetal": {
-        "filename": "results/{}_baremetal_output.csv",
+        "filename": "results/{}_baremetal_output_cloudlab.csv",
         "label": "Bare Metal",
         "color": "blue",
     },
     "k8s-antrea": {
-        "filename": "results/{}_k8s_output_antrea.csv",
+        "filename": "results/{}_k8s_output_antrea_cloudlab.csv",
         "label": "Antrea",
         "color": "orange",
     },
     "k8s-cilium": {
-        "filename": "results/{}_k8s_output_cilium.csv",
+        "filename": "results/{}_k8s_output_cilium_cloudlab.csv",
         "label": "Cilium",
         "color": "green",
     },
     "k8s-oncache": {
-        "filename": "results/{}_k8s_output_oncache.csv",
+        "filename": "results/{}_k8s_output_oncache_cloudlab.csv",
         "label": "ONCache",
         "color": "red",
     }

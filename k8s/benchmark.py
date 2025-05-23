@@ -207,48 +207,53 @@ def run_netperf_benchmark(
     print("netperf benchmark completed for all flows.")
 
 
-def run_benchmark(bench_type: Optional[BenchType], overlay: str):
+def run_benchmark(bench_type: Optional[BenchType], overlay: str, test: Optional[str]):
     benchmark_config = get_benchmark_config()
     load_kube_config()
 
     # Clear logs
     for bt in [bench_type] if bench_type else BenchType:
-        subprocess.run(["mkdir", "-p", f"logs/k8s/{overlay}/{bt.value.lower()}"])
-        subprocess.run(
-            [
-                "find",
-                f"logs/k8s/{overlay}/{bt.value.lower()}",
-                "-name",
-                "*.json",
-                "-delete",
-            ],
-            check=True,
-        )
-        subprocess.run(
-            [
-                "find",
-                f"logs/k8s/{overlay}/{bt.value.lower()}",
-                "-name",
-                "*.txt",
-                "-delete",
-            ],
-            check=True,
-        )
+        for t in [test] if test else ["throughput", "latency"]:
+            subprocess.run(["mkdir", "-p", f"logs/k8s/{overlay}/{bt.value.lower()}"])
+            subprocess.run(
+                [
+                    "find",
+                    f"logs/k8s/{overlay}/{bt.value.lower()}",
+                    "-name",
+                    f"*_{t}_*.json",
+                    "-delete",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "find",
+                    f"logs/k8s/{overlay}/{bt.value.lower()}",
+                    "-name",
+                    f"*_{t}_*.txt",
+                    "-delete",
+                ],
+                check=True,
+            )
 
     # Run iperf3 benchmark
-    pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
-    if bench_type is None:
-        for bt in BenchType:
-            run_iperf3_benchmark(benchmark_config, pods, bt, overlay)
-    else:
-        run_iperf3_benchmark(benchmark_config, pods, bench_type, overlay)
-    k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
+    if test is None or test == "throughput":
+        pods = k8s_startup("iperf", IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
+        if bench_type is None:
+            for bt in BenchType:
+                run_iperf3_benchmark(benchmark_config, pods, bt, overlay)
+        else:
+            run_iperf3_benchmark(benchmark_config, pods, bench_type, overlay)
+        k8s_teardown(IPERF_SERVER_DEPLOYMENT, IPERF_CLIENT_DEPLOYMENT)
 
     # Run netperf benchmark
-    pods = k8s_startup("netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
-    if bench_type is None:
-        for bt in BenchType:
-            run_netperf_benchmark(benchmark_config, pods, bt, overlay)
-    else:
-        run_netperf_benchmark(benchmark_config, pods, bench_type, overlay)
-    k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)
+    if test is None or test == "latency":
+        pods = k8s_startup(
+            "netperf", NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT
+        )
+        if bench_type is None:
+            for bt in BenchType:
+                run_netperf_benchmark(benchmark_config, pods, bt, overlay)
+        else:
+            run_netperf_benchmark(benchmark_config, pods, bench_type, overlay)
+        k8s_teardown(NETPERF_SERVER_DEPLOYMENT, NETPERF_CLIENT_DEPLOYMENT)

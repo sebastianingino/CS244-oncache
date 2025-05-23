@@ -35,6 +35,14 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "-t",
+        "--test",
+        type=str,
+        help="The test to run",
+        choices=["throughput", "latency"],
+        default=None,
+    )
+    parser.add_argument(
         "--parse-only",
         action="store_true",
         help="Only parse the results without running the benchmark",
@@ -67,7 +75,7 @@ def main():
     if args.benchmark == "baremetal":
         role = get_role()
         print("Running baremetal benchmark...")
-        baremetal_benchmark(BenchType.into(args.mode))
+        baremetal_benchmark(BenchType.into(args.mode), args.test)
         if role == "primary":
             for bench_type in BenchType:
                 baremetal_parse(
@@ -76,7 +84,7 @@ def main():
                 )
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
-        k8s_benchmark(BenchType.into(args.mode), args.overlay)
+        k8s_benchmark(BenchType.into(args.mode), args.overlay, args.test)
         for bench_type in BenchType:
             k8s_parse(
                 K8S_OUTPUT_FILE.format(
