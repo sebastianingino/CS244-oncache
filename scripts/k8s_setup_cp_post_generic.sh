@@ -1,7 +1,7 @@
 #!/bin/bash
 
 LOCAL_IP=10.10.1.1
-CIDR=10.10.0.0/16
+CIDR=10.244.0.0/16
 
 # Control plane setup script for Kubernetes
 # based on https://medium.com/@priyantha.getc/step-by-step-guide-to-creating-a-kubernetes-cluster-on-ubuntu-22-04-using-containerd-runtime-0ead53a8d273
