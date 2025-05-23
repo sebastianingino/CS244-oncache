@@ -21,14 +21,20 @@ def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, f
     with open(filename, "r") as f:
         data = json.load(f)
 
-        bits_per_second = float(data["end"]["sum_received"]["bits_per_second"])
-        cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
-        num_flows = int(data["start"]["test_start"]["num_streams"])
+        try:
+            bits_per_second = float(data["end"]["sum_received"]["bits_per_second"])
+            cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
+            num_flows = int(data["start"]["test_start"]["num_streams"])
 
-        return {
-            "Throughput": bits_per_second / BITS_TO_GBPS / num_flows,
-            "Throughput CPU": cpu_utilization / num_flows,
-        }
+            return {
+                "Throughput": bits_per_second / BITS_TO_GBPS / num_flows,
+                "Throughput CPU": cpu_utilization / num_flows,
+            }
+
+        except Exception as e:
+            print(f"Failed to parse {filename}")
+            raise e
+
 
 
 def parse_rr_single(
