@@ -23,8 +23,6 @@ def run_client_iperf(
                 str(benchmark_config["port_start"] + i),
                 "-t",  # Duration of the test in seconds
                 str(benchmark_config["duration"]),
-                "-P",  # Number of parallel client streams
-                str(n_flows),
                 "--logfile",
                 f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
                 "--json",  # Output in JSON format for easier parsing
@@ -121,7 +119,7 @@ def run_server_iperf(benchmark_config: BenchmarkConfig):
         cmd = [
             "iperf3",
             "-s",
-            "-p",
+            "-p", # Port number to listen on
             str(benchmark_config["port_start"] + i),
             "--logfile",
             f"logs/baremetal/server_log_throughput_{i}_flows.json",
@@ -145,7 +143,7 @@ def run_server_netperf(benchmark_config: BenchmarkConfig):
     # netperf rr benchmark
     cmd = [
         "netserver",
-        "-p",
+        "-p", # Port number to listen on
         str(benchmark_config["port_start"]),
         "-D",  # Run NOT as a daemon
     ]
