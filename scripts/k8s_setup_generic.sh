@@ -6,6 +6,8 @@ sudo apt update
 sudo apt install systemd-timesyncd
 sudo timedatectl set-ntp true
 
+sudo swapoff -a
+sudo sed -i.bak -r 's/(.+ swap .+)/#\1/' /etc/fstab
 free -m # Check no swap is enabled
 
 # Load kernel modules
@@ -55,7 +57,7 @@ sudo apt install cri-tools
 echo "runtime-endpoint: unix:///run/containerd/containerd.sock" | sudo tee -a /etc/crictl.yaml
 echo "image-endpoint: unix:///run/containerd/containerd.sock" | sudo tee -a /etc/crictl.yaml
 echo "timeout: 2" | sudo tee -a /etc/crictl.yaml
-echo "debug: true" | sudo tee -a /etc/crictl.yaml
+echo "debug: false" | sudo tee -a /etc/crictl.yaml
 echo "pull-image-on-create: false" | sudo tee -a /etc/crictl.yaml
 
 # Enable kubelet service
