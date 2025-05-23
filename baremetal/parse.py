@@ -80,9 +80,9 @@ def parse_throughput_many(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
         flow_result = {}
-        for i in range(n_flows):
+        for flow_idx in range(n_flows):
             single_result = parse_throughput_single(
-                pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows),
+                pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows, flow_idx=flow_idx),
                 bench_type,
             )
             for field, item in single_result.items():
