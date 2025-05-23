@@ -355,6 +355,8 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 
 	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)), slog.Any("value", data))
 
+	time.Sleep(100 * time.Millisecond)
+
 	return nil
 }
 
