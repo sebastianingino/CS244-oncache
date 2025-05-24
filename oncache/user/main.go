@@ -355,8 +355,6 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 
 	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)), slog.Any("value", data))
 
-	time.Sleep(100 * time.Millisecond)
-
 	return nil
 }
 
@@ -470,7 +468,7 @@ func watchContainers(clientset *kubernetes.Clientset, hostname *string, containe
 	criClient := criV1.NewRuntimeServiceClient(conn)
 
 	// Watch for new containers
-	watcher, err := clientset.CoreV1().Pods("").Watch(context.Background(), metav1.ListOptions{
+	watcher, err := clientset.CoreV1().Pods("default").Watch(context.Background(), metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", *hostname),
 	})
 	if err != nil {
