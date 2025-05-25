@@ -35,8 +35,8 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "color": "orange",
     },
     "k8s-cilium": {
-        "filename": "results/{}_k8s_output_cilium_cloudlab.csv",
-        "label": "Cilium",
+        "filename": "results/{}_k8s_output_cilium_1-16_cloudlab.csv",
+        "label": "Cilium (1.16)",
         "color": "green",
     },
     "k8s-oncache": {
