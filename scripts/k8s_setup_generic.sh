@@ -3,7 +3,7 @@
 # Based on https://medium.com/@priyantha.getc/step-by-step-guide-to-creating-a-kubernetes-cluster-on-ubuntu-22-04-using-containerd-runtime-0ead53a8d273
 
 sudo apt update
-sudo apt install systemd-timesyncd
+sudo apt install systemd-timesyncd -y
 sudo timedatectl set-ntp true
 
 sudo swapoff -a
