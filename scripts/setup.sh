@@ -12,5 +12,5 @@ source ~/.bashrc
 mise trust
 
 mise install
-
+sleep 1 # Wait for mise to recognize the new packages
 pip install -r requirements.txt
