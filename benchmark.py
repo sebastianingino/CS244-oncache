@@ -56,20 +56,22 @@ def main():
     if args.parse_only:
         print("Parsing results only...")
         if args.benchmark == "baremetal":
-            for bench_type in BenchType:
-                baremetal_parse(
-                    BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
-                    bench_type,
-                )
+            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+                if bench_type is not None:
+                    baremetal_parse(
+                        BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                        bench_type,
+                    )
         elif args.benchmark == "k8s":
-            for bench_type in BenchType:
-                k8s_parse(
-                    K8S_OUTPUT_FILE.format(
-                        bench_type=bench_type.value.lower(), overlay=args.overlay
-                    ),
-                    bench_type,
-                    args.overlay,
-                )
+            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+                if bench_type is not None:
+                    k8s_parse(
+                        K8S_OUTPUT_FILE.format(
+                            bench_type=bench_type.value.lower(), overlay=args.overlay
+                        ),
+                        bench_type,
+                        args.overlay,
+                    )
         return
 
     if args.benchmark == "baremetal":
