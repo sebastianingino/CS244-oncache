@@ -13,4 +13,4 @@ mise trust
 
 mise install
 
-~/.local/share/mise/installs/python/3.13.3/bin/pip install -r requirements.txt
+`mise which pip` install -r requirements.txt
