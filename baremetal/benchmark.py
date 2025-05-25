@@ -1,4 +1,5 @@
 import subprocess
+import time
 from typing import Optional
 
 from shared.config import BenchType, BenchmarkConfig, get_benchmark_config, load_config
@@ -40,6 +41,7 @@ def run_client_iperf(
                     f"Error in iperf3 for {n_flows} flows: {p.stderr.read().decode()}"
                 )
         print(f"iperf3 completed successfully for {n_flows} flows.")
+        time.sleep(1)  # Sleep to avoid overwhelming the server
     print(f"iperf3 {bench_type.value} throughput benchmark completed for all flows.")
 
 
@@ -82,6 +84,8 @@ def run_client_netperf(
             ) as f:
                 f.write(f"Output for flow {i + 1}:\n")
                 f.write(p.stdout.read().decode())
+        # Sleep to avoid overwhelming the server
+        time.sleep(1)
     print(f"netperf {bench_type.value} RR benchmark completed for all flows.")
 
 

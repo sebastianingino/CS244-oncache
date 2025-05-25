@@ -155,7 +155,7 @@ def run_iperf3_benchmark(
                     encoding="utf-8",
                 ) as f:
                     f.write(p.stdout.read().decode())
-
+        time.sleep(1)  # Sleep to avoid overwhelming the server
     print("iperf3 throughput benchmark completed for all flows.")
 
 
@@ -203,7 +203,7 @@ def run_netperf_benchmark(
                     encoding="utf-8",
                 ) as f:
                     f.write(p.stdout.read().decode())
-
+        time.sleep(1)  # Sleep to avoid overwhelming the server
     print("netperf benchmark completed for all flows.")
 
 
