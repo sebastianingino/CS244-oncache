@@ -77,22 +77,24 @@ def main():
         print("Running baremetal benchmark...")
         baremetal_benchmark(BenchType.into(args.mode), args.test)
         if role == "primary":
-            for bench_type in BenchType:
-                baremetal_parse(
-                    BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
-                    bench_type,
-                )
+            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+                if bench_type is not None:
+                    baremetal_parse(
+                        BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                        bench_type,
+                    )
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
         k8s_benchmark(BenchType.into(args.mode), args.overlay, args.test)
-        for bench_type in BenchType:
-            k8s_parse(
-                K8S_OUTPUT_FILE.format(
-                    bench_type=bench_type.value.lower(), overlay=args.overlay
-                ),
-                bench_type,
-                args.overlay,
-            )
+        for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+            if bench_type is not None:
+                k8s_parse(
+                    K8S_OUTPUT_FILE.format(
+                        bench_type=bench_type.value.lower(), overlay=args.overlay
+                    ),
+                    bench_type,
+                    args.overlay,
+                )
 
 
 if __name__ == "__main__":
