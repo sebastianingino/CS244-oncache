@@ -20,7 +20,6 @@ helm install cilium cilium/cilium --version 1.17.4 \
 --set enableIPv4BIGTCP=true \
 --set ipv4NativeRoutingCIDR="10.244.0.0/16" \
 --set autoDirectNodeRoutes=true \
---set bandwidthManager.enabled=true \
 --set installNoConntrackIptablesRules=true \
 --set hubble.enabled=false \
 --set bpfClockProbe=true
