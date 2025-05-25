@@ -349,8 +349,17 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	}
 
 	// Convert the IP to a uint32 for the map key
-	if err := ingressMap.Put(binary.NativeEndian.Uint32(ipv4), data); err != nil {
-		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
+	var lookupValue IngressData
+	for ingressMap.Lookup(binary.NativeEndian.Uint32(ipv4), &lookupValue) != nil {
+		slog.Info("Pod data does not exist in ingress_cache map, adding new entry",
+			slog.Any("podIP", pod.Status.PodIP),
+			slog.Any("vethIdx", vethIdx),
+			slog.Any("key", binary.NativeEndian.Uint32(ipv4)),
+			slog.Any("value", data),
+		)
+		if err := ingressMap.Put(binary.NativeEndian.Uint32(ipv4), data); err != nil {
+			return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
+		}
 	}
 
 	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)), slog.Any("value", data))
