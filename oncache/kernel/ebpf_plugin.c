@@ -3,9 +3,6 @@
 // Maximum number of entries in the caches
 #define MAX_ENTRIES 1024
 
-// Interface map size
-#define INTERFACE_MAP_SIZE 16
-
 // Marker for missed packets (note: first 2 bits are reserved for ECN)
 #define MISSED_MARK (1 << 2)
 // Marker for established flows (note: first 2 bits are reserved for ECN)
