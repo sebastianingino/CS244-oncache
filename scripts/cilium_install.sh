@@ -8,6 +8,7 @@ sudo apt-get update
 sudo apt-get install helm
 
 # Install cilium
+helm repo add cilium https://helm.cilium.io/
 helm install cilium cilium/cilium --version 1.17.4 \
 --namespace kube-system \
 --set kubeProxyReplacement=true \
