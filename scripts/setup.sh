@@ -1,5 +1,3 @@
-#!/bin/bash
-
 sudo apt update
 sudo apt install iperf3 netperf clang libbpf-dev llvm make gh -y
 
@@ -10,3 +8,9 @@ curl https://mise.run | sh
 echo "eval \"\$(/users/ingino/.local/bin/mise activate bash)\"" >> ~/.bashrc
 
 source ~/.bashrc
+
+mise trust
+
+mise install
+
+pip install -r requirements.txt
