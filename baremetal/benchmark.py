@@ -18,15 +18,14 @@ def run_client_iperf(
         for i in range(n_flows):
             cmd = [
                 "iperf3",
-                "-l1m",  # Set the length of the buffer to 1 MB
                 "-c",
                 destination,
                 "-p",  # Port number to connect to the server
                 str(benchmark_config["port_start"] + i),
                 "-t",  # Duration of the test in seconds
-                str(benchmark_config["duration"]),
+                str(benchmark_config["duration"] + benchmark_config["delay"]),
                 "-O",  # Set the number of seconds to omit at the start of the test
-                str(benchmark_config["omit"]),
+                str(benchmark_config["delay"]),
                 "--logfile",
                 f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
                 "--json",  # Output in JSON format for easier parsing
@@ -34,9 +33,7 @@ def run_client_iperf(
             if bench_type == BenchType.TCP:
                 cmd.append("-l1m")  # Set the length of the buffer to 1 MB
             if bench_type == BenchType.UDP:
-                cmd.append("-u")  # UDP test
-                cmd.append("-b")  # Bitrate limit
-                cmd.append("0")  # No limit
+                cmd += ["-u", "-b", "0"]  # UDP, no bandwidth limit
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             procs.append(p)
         for p in procs:
@@ -66,8 +63,10 @@ def run_client_netperf(
             "-t",  # Test type
             f"{bench_type.value}_RR",  # RR test
             "-C",  # Report remote CPU utilization
-            "-i",  # number of iterations
-            str(benchmark_config["iterations"]),
+            "-l",  # Length of the test in seconds
+            str(benchmark_config["duration"]),
+            "-s",  # Delay in seconds before starting the test
+            str(benchmark_config["delay"]),
         ]
 
         processes = []

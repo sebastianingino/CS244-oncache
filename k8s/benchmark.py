@@ -130,10 +130,10 @@ def run_iperf3_benchmark(
                 "iperf3",
                 "-c",
                 server["ip"],
-                "-t",  # Test type
-                str(benchmark_config["duration"]),
+                "-t",  # Duration of the test in seconds
+                str(benchmark_config["duration"] + benchmark_config["delay"]),
                 "-O",  # Set the number of seconds to omit at the start of the test
-                str(benchmark_config["omit"]),
+                str(benchmark_config["delay"]),
                 "--json",
             ]
             if bench_type == BenchType.TCP:
@@ -185,8 +185,10 @@ def run_netperf_benchmark(
                 "-t",  # Test type
                 f"{bench_type.value}_RR",
                 "-C",  # Report remote CPU utilization
-                "-i",  # number of iterations
-                str(benchmark_config["iterations"]),
+                "-l",  # Length of the test in seconds
+                str(benchmark_config["duration"]),
+                "-s",  # Delay in seconds before starting the test
+                str(benchmark_config["delay"]),
             ]
 
             processes.append(
