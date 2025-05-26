@@ -351,8 +351,8 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	var (
 		key [4]byte
 		value IngressData
-		entries ingressMap.Iterate()
-		size := 0
+		entries = ingressMap.Iterate()
+		size = 0
 	)
 
 	// Print values in the ingress_cache map
