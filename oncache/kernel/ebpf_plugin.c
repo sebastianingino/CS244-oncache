@@ -1,7 +1,7 @@
 #include "ebpf_plugin.h"
 
 // Maximum number of entries in the caches
-#define MAX_ENTRIES 1024
+#define MAX_ENTRIES 4096
 
 // Marker for missed packets (note: first 2 bits are reserved for ECN)
 #define MISSED_MARK (1 << 2)
