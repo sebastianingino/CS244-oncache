@@ -1,3 +1,6 @@
+// Enable debug prints
+// #define DEBUG
+
 #include "ebpf_plugin.h"
 
 // Maximum number of entries in the caches
@@ -17,9 +20,6 @@
 // Maximum recommended UDP port for VXLAN
 // See: https://datatracker.ietf.org/doc/html/rfc7348#section-5
 #define VXLAN_UDP_PORT_MAX 65535
-
-// Enable debug prints
-// #define DEBUG
 
 // Egress cache L1: container destination IP -> host destination IP
 struct {
@@ -421,7 +421,7 @@ int ingress(struct __sk_buff *skb) {
 
     // Check if the outer packet is a VXLAN or GENEVE packet
     if (!is_encap_pkt(headers)) {
-        DEBUG_PRINT("(ingress) Not a VXLAN or GENEVE packet")
+        DEBUG_PRINT("(ingress) Not a VXLAN or GENEVE packet");
         return TC_ACT_OK;
     }
 
