@@ -372,8 +372,8 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 		return fmt.Errorf("ingress_cache map not found")
 	}
 
-	// Reset the key and value for the next iteration
 	size = 0
+	entries = ingressMap.Iterate()
 
 	// Iterate over the ingress map to get the size
 	for entries.Next(&key, &value) {
