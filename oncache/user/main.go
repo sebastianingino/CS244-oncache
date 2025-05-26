@@ -349,6 +349,7 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	}
 
 	// Convert the IP to a uint32 for the map key
+	slog.Info("Ingress map length", slog.Any("length", len(ingressMap)))
 	if err := ingressMap.Put(binary.NativeEndian.Uint32(ipv4), data); err != nil {
 		return fmt.Errorf("failed to add pod data to ingress_cache map: %v", err)
 	}
