@@ -1,5 +1,5 @@
 sudo apt update
-sudo apt install iperf3 netperf clang libbpf-dev llvm make gh -y
+sudo apt install iperf3 netperf clang libbpf-dev llvm make gh linux-tools-common linux-tools-generic linux-tools-$(uname -r) -y
 
 sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 
