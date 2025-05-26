@@ -43,7 +43,7 @@ struct {
 // Ingress cache: container destination IP -> (veth interface index, inner MAC
 // header)
 struct {
-    __uint(type, BPF_MAP_TYPE_LRU_HASH);
+    __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, addr_t);
     __type(value, struct ingress_data);
     __uint(max_entries, MAX_ENTRIES);
