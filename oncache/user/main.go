@@ -379,7 +379,7 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	for entries.Next(&key, &value) {
 		size++
 	}
-	slog.Info("ingress_cache map size", slog.Int("size", size))
+	slog.Info("ingress_cache map size", slog.Int("size", size), slog.Any("key", binary.NativeEndian.Uint32(ipv4)))
 
 	slog.Debug("added pod data to ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)), slog.Any("value", data))
 
