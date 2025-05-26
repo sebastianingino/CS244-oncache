@@ -13,6 +13,7 @@ sudo kubeadm init \
   --pod-network-cidr=$CIDR \
   --cri-socket unix:///var/run/containerd/containerd.sock \
   --apiserver-advertise-address $LOCAL_IP \
+  --node-name node0 \
   --v=5
 
 # Set up kubeconfig for user
