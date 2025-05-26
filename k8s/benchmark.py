@@ -128,10 +128,13 @@ def run_iperf3_benchmark(
                 client["name"],
                 "--",
                 "iperf3",
+                "-l1m",  # Set the length of the buffer to 1 MB
                 "-c",
                 server["ip"],
                 "-t",  # Test type
                 str(benchmark_config["duration"]),
+                "-O",  # Set the number of seconds to omit at the start of the test
+                str(benchmark_config["omit"]),
                 "--json",
             ]
             if bench_type == BenchType.UDP:

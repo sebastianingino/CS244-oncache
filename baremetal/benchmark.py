@@ -18,12 +18,15 @@ def run_client_iperf(
         for i in range(n_flows):
             cmd = [
                 "iperf3",
+                "-l1m",  # Set the length of the buffer to 1 MB
                 "-c",
                 destination,
                 "-p",  # Port number to connect to the server
                 str(benchmark_config["port_start"] + i),
                 "-t",  # Duration of the test in seconds
                 str(benchmark_config["duration"]),
+                "-O",  # Set the number of seconds to omit at the start of the test
+                str(benchmark_config["omit"]),
                 "--logfile",
                 f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
                 "--json",  # Output in JSON format for easier parsing
