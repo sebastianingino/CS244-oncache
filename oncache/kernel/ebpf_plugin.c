@@ -247,7 +247,7 @@ int egress(struct __sk_buff *skb) {
     struct ingress_data *ingress_data =
         bpf_map_lookup_elem(&ingress_cache, &headers->ip.saddr);
     if (!ingress_data) {
-        DEBUG_PRINT("(egress) Ingress data not found for IP: %u",
+        INFO_PRINT("(egress) Ingress data not found for IP: %u",
                    headers->ip.saddr);
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
@@ -360,7 +360,7 @@ int ingress_init(struct __sk_buff *skb) {
     struct ingress_data *data =
         bpf_map_lookup_elem(&ingress_cache, &headers->ip.daddr);
     if (!data) {
-        DEBUG_PRINT("(ingress_init) Ingress data not found for IP: %u",
+        INFO_PRINT("(ingress_init) Ingress data not found for IP: %u",
                    headers->ip.daddr);
         return TC_ACT_OK;
     }
@@ -460,7 +460,7 @@ int ingress(struct __sk_buff *skb) {
     struct ingress_data *data =
         bpf_map_lookup_elem(&ingress_cache, &headers->inner.ip.daddr);
     if (!data) {
-        DEBUG_PRINT("(ingress) Ingress data not found for IP: %u",
+        INFO_PRINT("(ingress) Ingress data not found for IP: %u",
                    headers->inner.ip.daddr);
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
