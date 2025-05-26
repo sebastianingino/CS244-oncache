@@ -367,7 +367,7 @@ func addIngressData(pod *v1.Pod, vethIdx int, coll *ebpf.Collection) error {
 	}
 
 	// Get the ingress map
-	ingressMap, ok := coll.Maps["ingress_cache"]
+	ingressMap, ok = coll.Maps["ingress_cache"]
 	if !ok {
 		return fmt.Errorf("ingress_cache map not found")
 	}
