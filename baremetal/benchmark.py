@@ -31,6 +31,8 @@ def run_client_iperf(
                 f"logs/baremetal/{bench_type.value.lower()}/client_log_throughput_{n_flows}_flows_{i}.json",
                 "--json",  # Output in JSON format for easier parsing
             ]
+            if bench_type == BenchType.TCP:
+                cmd.append("-l1m")  # Set the length of the buffer to 1 MB
             if bench_type == BenchType.UDP:
                 cmd.append("-u")  # UDP test
                 cmd.append("-b")  # Bitrate limit

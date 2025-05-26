@@ -128,7 +128,6 @@ def run_iperf3_benchmark(
                 client["name"],
                 "--",
                 "iperf3",
-                "-l1m",  # Set the length of the buffer to 1 MB
                 "-c",
                 server["ip"],
                 "-t",  # Test type
@@ -137,6 +136,8 @@ def run_iperf3_benchmark(
                 str(benchmark_config["omit"]),
                 "--json",
             ]
+            if bench_type == BenchType.TCP:
+                cmd.append("-l1m")  # Set the length of the buffer to 1 MB
             if bench_type == BenchType.UDP:
                 cmd += ["-u", "-b", "0"]  # UDP, no bandwidth limit
 
