@@ -3,4 +3,4 @@ max_flows = 32
 port_start = 3000
 duration = 15 # in seconds
 delay = 3 # in seconds, omit for benchmark time (throughput only)
-sleep = 5 # in seconds, between benchmarks
+sleep = 10 # in seconds, between benchmarks
