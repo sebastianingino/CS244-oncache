@@ -67,8 +67,6 @@ def run_client_netperf(
             "-C",  # Report remote CPU utilization
             "-l",  # Length of the test in seconds
             str(benchmark_config["duration"]),
-            "-s",  # Delay in seconds before starting the test
-            str(benchmark_config["delay"]),
         ]
 
         processes = []
