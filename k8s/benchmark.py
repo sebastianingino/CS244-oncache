@@ -96,8 +96,6 @@ def k8s_startup(name: str, server_deployment: str, client_deployment: str) -> Po
             }
         )
 
-    time.sleep(10)
-
     return {
         "clients": client_pods,
         "servers": server_pods,
@@ -119,6 +117,7 @@ def run_iperf3_benchmark(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
+        time.sleep(benchmark_config["sleep"])  # Sleep before starting the test
         print(f"Running iperf3 for {n_flows} flows...")
         processes = []
         for client, server in pairs[:n_flows]:
@@ -159,13 +158,13 @@ def run_iperf3_benchmark(
                     encoding="utf-8",
                 ) as f:
                     f.write(p.stdout.read().decode())
-        time.sleep(1)  # Sleep to avoid overwhelming the server
     print("iperf3 throughput benchmark completed for all flows.")
 
 
 def run_netperf_benchmark(
     benchmark_config: BenchmarkConfig, pods: Pods, bench_type: BenchType, overlay: str
 ):
+    time.sleep(benchmark_config["sleep"])  # Sleep before starting the test
     print(f"Running {bench_type.value} netperf benchmark...")
     pairs = list(zip(pods["clients"], pods["servers"]))
     for n_flows in exp_range(
@@ -209,7 +208,6 @@ def run_netperf_benchmark(
                     encoding="utf-8",
                 ) as f:
                     f.write(p.stdout.read().decode())
-        time.sleep(1)  # Sleep to avoid overwhelming the server
     print("netperf benchmark completed for all flows.")
 
 

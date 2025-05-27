@@ -14,6 +14,8 @@ def run_client_iperf(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
+        time.sleep(benchmark_config["sleep"]) # Sleep before starting the test
+        print(f"Running iperf3 for {n_flows} flows...")
         procs = []
         for i in range(n_flows):
             cmd = [
@@ -42,8 +44,6 @@ def run_client_iperf(
                 print(
                     f"Error in iperf3 for {n_flows} flows: {p.stderr.read().decode()}"
                 )
-        print(f"iperf3 completed successfully for {n_flows} flows.")
-        time.sleep(1)  # Sleep to avoid overwhelming the server
     print(f"iperf3 {bench_type.value} throughput benchmark completed for all flows.")
 
 
@@ -54,6 +54,8 @@ def run_client_netperf(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
+        time.sleep(benchmark_config["sleep"]) # Sleep before starting the test
+        print(f"Running netperf for {n_flows} flows...")
         cmd = [
             "netperf",
             "-H",
@@ -79,7 +81,6 @@ def run_client_netperf(
                 print(
                     f"Error in netperf for {n_flows} flows: {p.stderr.read().decode()}"
                 )
-        print(f"netperf completed successfully for {n_flows} flows.")
         for i, p in enumerate(processes):
             # Export the output to a file
             with open(
@@ -88,8 +89,6 @@ def run_client_netperf(
             ) as f:
                 f.write(f"Output for flow {i + 1}:\n")
                 f.write(p.stdout.read().decode())
-        # Sleep to avoid overwhelming the server
-        time.sleep(1)
     print(f"netperf {bench_type.value} RR benchmark completed for all flows.")
 
 

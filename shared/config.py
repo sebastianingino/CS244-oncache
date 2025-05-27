@@ -55,6 +55,7 @@ BenchmarkConfig = TypedDict(
         "port_start": int,
         "duration": int,
         "delay": int,
+        "sleep": int,
     },
 )
 
