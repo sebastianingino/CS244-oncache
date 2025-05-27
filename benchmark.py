@@ -1,4 +1,5 @@
 import argparse
+import os
 from baremetal.benchmark import run_benchmark as baremetal_benchmark
 from baremetal.parse import run_parse as baremetal_parse
 from k8s.benchmark import run_benchmark as k8s_benchmark
@@ -6,8 +7,8 @@ from k8s.parse import run_parse as k8s_parse
 from shared.config import BenchType
 from shared.setup import get_role
 
-BAREMETAL_OUTPUT_FILE = "results/{bench_type}_baremetal_output.csv"
-K8S_OUTPUT_FILE = "results/{bench_type}_k8s_output_{overlay}.csv"
+BAREMETAL_OUTPUT_FILE = "{dir}/{bench_type}_baremetal_output.csv"
+K8S_OUTPUT_FILE = "{dir}/{bench_type}_k8s_output_{overlay}.csv"
 
 
 def main():
@@ -43,6 +44,12 @@ def main():
         default=None,
     )
     parser.add_argument(
+        "-o",
+        "--output",
+        help="The output directory for the benchmark results",
+        default="results",
+    )
+    parser.add_argument(
         "--parse-only",
         action="store_true",
         help="Only parse the results without running the benchmark",
@@ -53,21 +60,32 @@ def main():
         print("Overlay network must be specified for Kubernetes benchmark.")
         return
 
+    # make output dir if it does not exist
+    os.makedirs(args.output, exist_ok=True)
+
     if args.parse_only:
         print("Parsing results only...")
         if args.benchmark == "baremetal":
-            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+            for bench_type in (
+                BenchType if args.mode is None else [BenchType.into(args.mode)]
+            ):
                 if bench_type is not None:
                     baremetal_parse(
-                        BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                        BAREMETAL_OUTPUT_FILE.format(
+                            dir=args.output, bench_type=bench_type.value.lower()
+                        ),
                         bench_type,
                     )
         elif args.benchmark == "k8s":
-            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+            for bench_type in (
+                BenchType if args.mode is None else [BenchType.into(args.mode)]
+            ):
                 if bench_type is not None:
                     k8s_parse(
                         K8S_OUTPUT_FILE.format(
-                            bench_type=bench_type.value.lower(), overlay=args.overlay
+                            dir=args.output,
+                            bench_type=bench_type.value.lower(),
+                            overlay=args.overlay,
                         ),
                         bench_type,
                         args.overlay,
@@ -79,20 +97,28 @@ def main():
         print("Running baremetal benchmark...")
         baremetal_benchmark(BenchType.into(args.mode), args.test)
         if role == "primary":
-            for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+            for bench_type in (
+                BenchType if args.mode is None else [BenchType.into(args.mode)]
+            ):
                 if bench_type is not None:
                     baremetal_parse(
-                        BAREMETAL_OUTPUT_FILE.format(bench_type=bench_type.value.lower()),
+                        BAREMETAL_OUTPUT_FILE.format(
+                            dir=args.output, bench_type=bench_type.value.lower()
+                        ),
                         bench_type,
                     )
     elif args.benchmark == "k8s":
         print("Running Kubernetes benchmark...")
         k8s_benchmark(BenchType.into(args.mode), args.overlay, args.test)
-        for bench_type in BenchType if args.mode is None else [BenchType.into(args.mode)]:
+        for bench_type in (
+            BenchType if args.mode is None else [BenchType.into(args.mode)]
+        ):
             if bench_type is not None:
                 k8s_parse(
                     K8S_OUTPUT_FILE.format(
-                        bench_type=bench_type.value.lower(), overlay=args.overlay
+                        dir=args.output,
+                        bench_type=bench_type.value.lower(),
+                        overlay=args.overlay,
                     ),
                     bench_type,
                     args.overlay,
