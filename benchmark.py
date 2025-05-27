@@ -61,7 +61,7 @@ def main():
         return
 
     # make output dir if it does not exist
-    os.makedirs(args.output, exist_ok=True)
+    os.makedirs(args.dir, exist_ok=True)
 
     if args.parse_only:
         print("Parsing results only...")
@@ -72,7 +72,7 @@ def main():
                 if bench_type is not None:
                     baremetal_parse(
                         BAREMETAL_OUTPUT_FILE.format(
-                            dir=args.output, bench_type=bench_type.value.lower()
+                            dir=args.dir, bench_type=bench_type.value.lower()
                         ),
                         bench_type,
                     )
@@ -83,7 +83,7 @@ def main():
                 if bench_type is not None:
                     k8s_parse(
                         K8S_OUTPUT_FILE.format(
-                            dir=args.output,
+                            dir=args.dir,
                             bench_type=bench_type.value.lower(),
                             overlay=args.overlay,
                         ),
@@ -103,7 +103,7 @@ def main():
                 if bench_type is not None:
                     baremetal_parse(
                         BAREMETAL_OUTPUT_FILE.format(
-                            dir=args.output, bench_type=bench_type.value.lower()
+                            dir=args.dir, bench_type=bench_type.value.lower()
                         ),
                         bench_type,
                     )
@@ -116,7 +116,7 @@ def main():
             if bench_type is not None:
                 k8s_parse(
                     K8S_OUTPUT_FILE.format(
-                        dir=args.output,
+                        dir=args.dir,
                         bench_type=bench_type.value.lower(),
                         overlay=args.overlay,
                     ),
