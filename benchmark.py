@@ -44,8 +44,8 @@ def main():
         default=None,
     )
     parser.add_argument(
-        "-o",
-        "--output",
+        "-d",
+        "--dir",
         help="The output directory for the benchmark results",
         default="results",
     )
