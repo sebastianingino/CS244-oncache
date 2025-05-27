@@ -39,11 +39,11 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "Cilium (1.16)",
         "color": "green",
     },
-    # "k8s-cilium-new": {
-    #     "filename": "{}_k8s_output_cilium_1-17_tuned.csv",
-    #     "label": "Cilium (1.17)",
-    #     "color": "lightgreen",
-    # },
+    "k8s-cilium-new": {
+        "filename": "{}_k8s_output_cilium_1-17_tuned.csv",
+        "label": "Cilium (1.17)",
+        "color": "lightgreen",
+    },
     "k8s-oncache": {
         "filename": "{}_k8s_output_oncache.csv",
         "label": "ONCache",
