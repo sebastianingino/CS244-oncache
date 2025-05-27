@@ -25,27 +25,27 @@ Graph = TypedDict(
 
 DATA_CONFIG: Dict[str, DataConfig] = {
     "baremetal": {
-        "filename": "results/{}_baremetal_output_cloudlab.csv",
+        "filename": "{}_baremetal_output.csv",
         "label": "Bare Metal",
         "color": "blue",
     },
     "k8s-antrea": {
-        "filename": "results/{}_k8s_output_antrea_cloudlab.csv",
+        "filename": "{}_k8s_output_antrea.csv",
         "label": "Antrea",
         "color": "orange",
     },
     "k8s-cilium": {
-        "filename": "results/{}_k8s_output_cilium_1-16_tuned_cloudlab.csv",
+        "filename": "{}_k8s_output_cilium_1-16_tuned.csv",
         "label": "Cilium (1.16)",
         "color": "green",
     },
     # "k8s-cilium-new": {
-    #     "filename": "results/{}_k8s_output_cilium_1-17_tuned_cloudlab.csv",
+    #     "filename": "{}_k8s_output_cilium_1-17_tuned.csv",
     #     "label": "Cilium (1.17)",
     #     "color": "lightgreen",
     # },
     "k8s-oncache": {
-        "filename": "results/{}_k8s_output_oncache_cloudlab.csv",
+        "filename": "{}_k8s_output_oncache.csv",
         "label": "ONCache",
         "color": "red",
     },
@@ -88,7 +88,7 @@ GRAPHS: List[Graph] = [
 ]
 
 
-def load_data(bench_type: BenchType) -> Dict[str, pd.DataFrame]:
+def load_data(bench_type: BenchType, data_dir: str) -> Dict[str, pd.DataFrame]:
     """
     Load the data from the configuration.
 
@@ -98,9 +98,9 @@ def load_data(bench_type: BenchType) -> Dict[str, pd.DataFrame]:
     data = {}
     for name, config in DATA_CONFIG.items():
         filename = config["filename"].format(bench_type.value.lower())
-        if not os.path.exists(filename):
+        if not os.path.exists(os.path.join(data_dir, filename)):
             raise FileNotFoundError(f"File {filename} does not exist.")
-        df = pd.read_csv(filename)
+        df = pd.read_csv(os.path.join(data_dir, filename))
         df.set_index("Flows", inplace=True)
         data[name] = df
 
@@ -176,6 +176,7 @@ def plot_data(
 def main():
     parser = argparse.ArgumentParser(description="Plot data from CSV files.")
     parser.add_argument(
+        "-o",
         "--output",
         type=str,
         default="results/{}_plot.png",
@@ -194,12 +195,19 @@ def main():
         action="store_true",
         help="Show the plot.",
     )
+    parser.add_argument(
+        "-d",
+        "--dir",
+        type=str,
+        default="results",
+        help="Directory to pull results from.",
+    )
     args = parser.parse_args()
 
     bench_type = BenchType.into(args.mode)
     for b in [bench_type] if bench_type else BenchType:
-        data = load_data(b)
-        plot_data(data, b, args.output.format(b.value.lower()), args.show)
+        data = load_data(b, args.dir)
+        plot_data(data, b, args.output.format(b.value.lower()), args.show, )
 
 
 if __name__ == "__main__":
