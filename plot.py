@@ -39,11 +39,16 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "Cilium (1.16)",
         "color": "green",
     },
+    # "k8s-cilium-new": {
+    #     "filename": "results/{}_k8s_output_cilium_1-17_tuned_cloudlab.csv",
+    #     "label": "Cilium (1.17)",
+    #     "color": "lightgreen",
+    # },
     "k8s-oncache": {
         "filename": "results/{}_k8s_output_oncache_cloudlab.csv",
         "label": "ONCache",
         "color": "red",
-    }
+    },
 }
 
 GRAPHS: List[Graph] = [
