@@ -264,17 +264,27 @@ func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.C
 	if err != nil {
 		return 0, fmt.Errorf("failed to get host network namespace: %v", err)
 	}
-	defer hostNetNS.Close()
+	defer func() {
+		if err := hostNetNS.Close(); err != nil {
+			slog.Error("Failed to close network namespace")
+		}
+	}()
 
 	// Get container network namespace
 	containerNetNS, err := netns.GetFromPid(containerPid)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get container network namespace: %v", err)
 	}
-	defer containerNetNS.Close()
+	defer func() {
+		if err := containerNetNS.Close(); err != nil {
+			slog.Error("Failed to close container namespace")
+		}
+	}()
 
 	// Step into container net namespace
-	netns.Set(containerNetNS)
+	if err := netns.Set(containerNetNS); err != nil {
+		return 0, fmt.Errorf("failed to step into container network namespace: %v", err)
+	}
 	defer func() {
 		if err := netns.Set(hostNetNS); err != nil {
 			// We should never fail to set the host namespace but if we do, we should freak out
@@ -438,20 +448,50 @@ func initContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.Ru
 	return nil
 }
 
-func retireContainer(pod *v1.Pod, container v1.ContainerStatus, criClient criV1.RuntimeServiceClient) error {
+func retireContainer(pod *v1.Pod, container v1.ContainerStatus, coll *ebpf.Collection, containers mapset.Set[string]) error {
 	slog.Info("Retiring container on pod", slog.Any("pod", pod.Name), slog.Any("container", container.ContainerID))
+
+	ip := net.ParseIP(pod.Status.PodIP)
+	if ip == nil {
+		return fmt.Errorf("failed to parse pod IP: %v", pod.Status.PodIP)
+	}
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return fmt.Errorf("failed to convert pod IP to v4: %v", pod.Status.PodIP)
+	}
+
+	if containers.Contains(container.ContainerID) {
+		ingressMap, ok := coll.Maps["ingress_cache"]
+		if !ok {
+			return fmt.Errorf("ingress_cache map not found")
+		}
+		if err := ingressMap.Delete(binary.NativeEndian.Uint32(ipv4)); err != nil {
+			// Erroring is OK here
+			slog.Debug("failed to remove local pod data from ingress_cache map", slog.Any("error", err))
+		}
+		slog.Debug("removed local pod data from ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)))
+	} else {
+		egressHostMap, ok := coll.Maps["egress_host_cache"]
+		if !ok {
+			return fmt.Errorf("egress_host_cache map not found")
+		}
+		if err := egressHostMap.Delete(binary.NativeEndian.Uint32(ipv4)); err != nil {
+			// Erroring is OK here
+			slog.Debug("failed to remove remote pod data to egress_host_cache map", slog.Any("error", err))
+		}
+		slog.Debug("removed remote pod data from egress_host_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)))
+	}
+
 	return nil
 }
 
-func watchContainers(clientset *kubernetes.Clientset, hostname *string, containerNetdev *string, coll *ebpf.Collection) error {
+func watchContainers(ctx context.Context, clientset *kubernetes.Clientset, hostname *string, containerNetdev *string, coll *ebpf.Collection) error {
 	// Get the initial list of containers
 	containers, err := getContainers(clientset, hostname)
 	if err != nil {
 		return fmt.Errorf("could not get containers: %v", err)
 	}
 	slog.Debug("Found containers", slog.Any("containers", containers))
-
-	slog.Info("Watching for new containers...")
 
 	// Connect to the CRI runtime
 	conn, err := grpc.NewClient("unix:///run/containerd/containerd.sock", grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -468,24 +508,17 @@ func watchContainers(clientset *kubernetes.Clientset, hostname *string, containe
 	criClient := criV1.NewRuntimeServiceClient(conn)
 
 	// Watch for new containers
-	watcher, err := clientset.CoreV1().Pods("default").Watch(context.Background(), metav1.ListOptions{
-		FieldSelector: fmt.Sprintf("spec.nodeName=%s", *hostname),
-	})
+	watcher, err := clientset.CoreV1().Pods("default").Watch(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("could not watch pods: %v", err)
 	}
 
-	// Catch SIGINT signal to stop the watcher
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-stop
+		<-ctx.Done()
 		watcher.Stop()
-		slog.Info("Stopping watcher...")
+		slog.Debug("Stopping container watcher...")
 	}()
 	defer watcher.Stop()
-
-	slog.Info("Press Ctrl+C to quit.")
 
 	for event := range watcher.ResultChan() {
 		switch event.Type {
@@ -495,7 +528,8 @@ func watchContainers(clientset *kubernetes.Clientset, hostname *string, containe
 				slog.Error("could not cast event object to pod", slog.Any("event", event))
 				continue
 			}
-			if pod.Status.Phase == v1.PodRunning {
+			// We only care about running pods on the current node
+			if pod.Status.Phase == v1.PodRunning && pod.Spec.NodeName == *hostname {
 				for _, container := range pod.Status.ContainerStatuses {
 					if container.State.Running != nil && !containers.Contains(container.ContainerID) {
 						// Initialize container
@@ -514,17 +548,88 @@ func watchContainers(clientset *kubernetes.Clientset, hostname *string, containe
 				slog.Error("could not cast event object to pod", slog.Any("event", event))
 				continue
 			}
+			// We care about all pods on all nodes since we reference them by IP (which can be reused)
 			if pod.Status.Phase == v1.PodSucceeded || pod.Status.Phase == v1.PodFailed {
 				for _, container := range pod.Status.ContainerStatuses {
-					if container.State.Terminated != nil && containers.Contains(container.ContainerID) {
+					if container.State.Terminated != nil {
 						// Retire container
-						if err := retireContainer(pod, container, criClient); err != nil {
+						if err := retireContainer(pod, container, coll, containers); err != nil {
 							slog.Error("could not retire container", slog.Any("error", err))
 							continue
 						}
-						// Remove container from set
+
+						// Remove container from set (maybe)
 						containers.Remove(container.ContainerID)
 					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func retireNode(node *v1.Node, coll *ebpf.Collection) error {
+	slog.Info("Retiring node", slog.Any("node", node.Name))
+
+	succeeded := false
+	for _, address := range node.Status.Addresses {
+		if address.Type == v1.NodeInternalIP {
+			ip := net.ParseIP(address.Address)
+			if ip == nil {
+				slog.Error("failed to parse node IP", slog.Any("address", address.Address))
+				continue
+			}
+			ipv4 := ip.To4()
+			if ipv4 == nil {
+				slog.Error("failed to parse node IP", slog.Any("address", address.Address))
+				continue
+			}
+
+			egressDataMap, ok := coll.Maps["egress_data_cache"]
+			if !ok {
+				return fmt.Errorf("egress_data_cache map not found")
+			}
+			if err := egressDataMap.Delete(binary.NativeEndian.Uint32(ipv4)); err != nil {
+				// Erroring is OK here
+				slog.Debug("failed to remove node data from egress_data_cache map", slog.Any("error", err))
+			}
+			succeeded = true
+			slog.Debug("removed node data from ingress_cache", slog.Any("key", binary.NativeEndian.Uint32(ipv4)))
+		}
+	}
+
+	if !succeeded {
+		slog.Warn("Found no internal IPs for node", slog.Any("node", node.Name))
+	}
+
+	return nil
+}
+
+func watchNodes(ctx context.Context, clientset *kubernetes.Clientset, coll *ebpf.Collection) error {
+	watcher, err := clientset.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("could not watch nodes: %v", err)
+	}
+
+	go func() {
+		<-ctx.Done()
+		watcher.Stop()
+		slog.Debug("Stopping node watcher...")
+	}()
+	defer watcher.Stop()
+
+	for event := range watcher.ResultChan() {
+		if event.Type == watch.Deleted {
+			node, ok := event.Object.(*v1.Node)
+			if !ok {
+				slog.Error("could not cast event object to node", slog.Any("event", event))
+				continue
+			}
+			if node.Status.Phase == v1.NodeTerminated {
+				if err := retireNode(node, coll); err != nil {
+					slog.Error("could not retire node", slog.Any("error", err))
+					continue
 				}
 			}
 		}
@@ -649,9 +754,38 @@ func run(hostname, kubeconfig, hostNetdev, containerNetdev, objPath *string) err
 		}
 	}()
 
-	// Watch for new containers
-	if err := watchContainers(clientset, hostname, containerNetdev, coll); err != nil {
-		return fmt.Errorf("could not watch containers: %v", err)
+	// Make cancelable context
+	ctx, cancel := context.WithCancelCause(context.Background())
+
+	// Catch SIGINT signal to stop the watcher
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-stop
+		cancel(nil)
+		slog.Info("Stopping watcher...")
+	}()
+
+	// Watch containers and nodes
+	go func() {
+		if err := watchContainers(ctx, clientset, hostname, containerNetdev, coll); err != nil {
+			cancel(fmt.Errorf("watchContainers failed: %v", err))
+		}
+	}()
+	go func() {
+		if err := watchNodes(ctx, clientset, coll); err != nil {
+			cancel(fmt.Errorf("watchNodes failed: %v", err))
+		}
+	}()
+
+	slog.Info("Watching nodes and containers...")
+	slog.Info("Press Ctrl+C to quit.")
+
+	<-ctx.Done()
+	if err := context.Cause(ctx); err != context.Canceled {
+		return err
+	} else {
+		slog.Info("Watcher stopped.")
 	}
 
 	return nil
