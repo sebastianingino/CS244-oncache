@@ -3,7 +3,6 @@ import time
 from typing import Optional
 
 from shared.config import BenchType, BenchmarkConfig, get_benchmark_config, load_config
-from shared.setup import get_role
 from shared.util import exp_range
 
 
@@ -175,7 +174,7 @@ def run_server(benchmark_config: BenchmarkConfig, test: Optional[str] = None):
         run_server_iperf(benchmark_config)
 
 
-def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = None):
+def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = None, role: Optional[str] = None):
     general_config = get_benchmark_config()
     spec_config = load_config("config/baremetal.toml")
 
@@ -207,13 +206,12 @@ def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = 
                 check=True,
             )
 
-    role = get_role()
-    if role == "primary":
-        destination = spec_config["node"]["secondary"]["ip"]
+    if role == "client":
+        destination = spec_config["node"]["server"]["ip"]
         run_client(general_config, destination, bench_type, test)
-    elif role == "secondary":
+    elif role == "server":
         run_server(general_config, test)
     else:
-        raise ValueError(f"Unknown role: {role}. Expected 'primary' or 'secondary'.")
+        raise ValueError(f"Unknown role: {role}. Expected 'client' or 'server'.")
 
     print("Benchmark completed.")

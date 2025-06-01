@@ -5,7 +5,6 @@ from baremetal.parse import run_parse as baremetal_parse
 from k8s.benchmark import run_benchmark as k8s_benchmark
 from k8s.parse import run_parse as k8s_parse
 from shared.config import BenchType
-from shared.setup import get_role
 
 BAREMETAL_OUTPUT_FILE = "{dir}/{bench_type}_baremetal_output.csv"
 K8S_OUTPUT_FILE = "{dir}/{bench_type}_k8s_output_{overlay}.csv"
@@ -23,8 +22,16 @@ def main():
         "-o",
         "--overlay",
         type=str,
-        help="The overlay network to use for the benchmark",
+        help="The overlay network to use for the benchmark (k8s only)",
         choices=["antrea", "cilium", "oncache"],
+        default=None,
+    )
+    parser.add_argument(
+        "-r",
+        "--role",
+        type=str,
+        help="The role of the node in the benchmark (baremetal only)",
+        choices=["client", "server"],
         default=None,
     )
     parser.add_argument(
@@ -58,6 +65,9 @@ def main():
     args = parser.parse_args()
     if args.benchmark == "k8s" and args.overlay is None:
         print("Overlay network must be specified for Kubernetes benchmark.")
+        return
+    if args.benchmark == "baremetal" and args.role is None:
+        print("Role must be specified for baremetal benchmark.")
         return
 
     # make output dir if it does not exist
@@ -93,10 +103,9 @@ def main():
         return
 
     if args.benchmark == "baremetal":
-        role = get_role()
         print("Running baremetal benchmark...")
-        baremetal_benchmark(BenchType.into(args.mode), args.test)
-        if role == "primary":
+        baremetal_benchmark(BenchType.into(args.mode), args.test, args.role)
+        if args.role == "client":  # Only parse on client
             for bench_type in (
                 BenchType if args.mode is None else [BenchType.into(args.mode)]
             ):
