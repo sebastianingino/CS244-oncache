@@ -91,7 +91,7 @@ def run_client_netperf(
 
 def run_client(
     benchmark_config: BenchmarkConfig,
-    destination: str,
+    server_ip: str,
     bench_type: Optional[BenchType],
     test: Optional[str] = None,
 ):
@@ -99,9 +99,9 @@ def run_client(
         # iperf Throughput Benchmark
         if bench_type is None:
             for bt in BenchType:
-                run_client_iperf(benchmark_config, destination, bt)
+                run_client_iperf(benchmark_config, server_ip, bt)
         else:
-            run_client_iperf(benchmark_config, destination, bench_type)
+            run_client_iperf(benchmark_config, server_ip, bench_type)
 
     if test is None:
         input("Press Enter to continue to the next benchmark...")
@@ -110,9 +110,9 @@ def run_client(
         # netperf Latency Benchmark
         if bench_type is None:
             for bt in BenchType:
-                run_client_netperf(benchmark_config, destination, bt)
+                run_client_netperf(benchmark_config, server_ip, bt)
         else:
-            run_client_netperf(benchmark_config, destination, bench_type)
+            run_client_netperf(benchmark_config, server_ip, bench_type)
 
 
 def run_server_iperf(benchmark_config: BenchmarkConfig):
@@ -207,8 +207,8 @@ def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = 
             )
 
     if role == "client":
-        destination = spec_config["node"]["server"]["ip"]
-        run_client(general_config, destination, bench_type, test)
+        server_ip = spec_config["server_ip"]
+        run_client(general_config, server_ip, bench_type, test)
     elif role == "server":
         run_server(general_config, test)
     else:
