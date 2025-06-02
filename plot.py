@@ -139,7 +139,7 @@ def plot_data(
     Args:
         data (Dict[str, pd.DataFrame]): A dictionary containing DataFrames for each data source .
     """
-    fig, plts = plt.subplots(1, len(GRAPHS), figsize=(20, 5))
+    fig, plts = plt.subplots(1, len(GRAPHS), figsize=(16, 4))
     fig.subplots_adjust(hspace=0.4)
     for i, graph in enumerate(GRAPHS):
         ax = plts[i]
