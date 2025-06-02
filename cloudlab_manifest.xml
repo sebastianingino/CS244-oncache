@@ -1,0 +1,73 @@
+<rspec xmlns="http://www.geni.net/resources/rspec/3" xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1" xmlns:tour="http://www.protogeni.net/resources/rspec/ext/apt-tour/1" xmlns:jacks="http://www.protogeni.net/resources/rspec/ext/jacks/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.geni.net/resources/rspec/3    http://www.geni.net/resources/rspec/3/request.xsd" type="request">
+  <node xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1" client_id="node0" exclusive="true" component_manager_id="urn:publicid:IDN+utah.cloudlab.us+authority+cm" component_id="urn:publicid:IDN+utah.cloudlab.us+node+amd269" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110433">
+    <sliver_type name="raw-pc">
+      <disk_image name="urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD"/>
+    </sliver_type>
+    <hardware_type name="c6525-100g"/>
+    <interface client_id="node0:eth1" component_id="urn:publicid:IDN+utah.cloudlab.us+interface+amd269:eth2" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110437" mac_address="0c42a18b3178">
+      <ip address="10.10.1.1" type="ipv4" netmask="255.255.255.0"/>
+    </interface>
+    <emulab:vnode name="amd269" hardware_type="c6525-100g"/>
+    <host name="node0.ingino-259075.cs244-oncache-PG0.utah.cloudlab.us" ipv4="128.110.219.180"/>
+    <services>
+      <login authentication="ssh-keys" hostname="amd269.utah.cloudlab.us" port="22" username="ingino"/>
+      <emulab:console server="boss.utah.cloudlab.us"/>
+      <emulab:recovery available="true"/>
+      <emulab:powercycle available="true"/>
+      <emulab:imageable available="true"/>
+    </services>
+  </node>
+  <node xmlns:emulab="http://www.protogeni.net/resources/rspec/ext/emulab/1" client_id="node1" exclusive="true" component_manager_id="urn:publicid:IDN+utah.cloudlab.us+authority+cm" component_id="urn:publicid:IDN+utah.cloudlab.us+node+amd280" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110434">
+    <sliver_type name="raw-pc">
+      <disk_image name="urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD"/>
+    </sliver_type>
+    <hardware_type name="c6525-100g"/>
+    <interface client_id="node1:eth1" component_id="urn:publicid:IDN+utah.cloudlab.us+interface+amd280:eth2" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110438" mac_address="0c42a1639e3c">
+      <ip address="10.10.1.2" type="ipv4" netmask="255.255.255.0"/>
+    </interface>
+    <emulab:vnode name="amd280" hardware_type="c6525-100g"/>
+    <host name="node1.ingino-259075.cs244-oncache-PG0.utah.cloudlab.us" ipv4="128.110.219.191"/>
+    <services>
+      <login authentication="ssh-keys" hostname="amd280.utah.cloudlab.us" port="22" username="ingino"/>
+      <emulab:console server="boss.utah.cloudlab.us"/>
+      <emulab:recovery available="true"/>
+      <emulab:powercycle available="true"/>
+      <emulab:imageable available="true"/>
+    </services>
+  </node>
+  <link client_id="link-1" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110436" vlantag="286">
+    <interface_ref client_id="node0:eth1" component_id="urn:publicid:IDN+utah.cloudlab.us+interface+amd269:eth2" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110437"/>
+    <interface_ref client_id="node1:eth1" component_id="urn:publicid:IDN+utah.cloudlab.us+interface+amd280:eth2" sliver_id="urn:publicid:IDN+utah.cloudlab.us+sliver+2110438"/>
+    <component_manager name="urn:publicid:IDN+utah.cloudlab.us+authority+cm"/>
+    <property xmlns="http://www.geni.net/resources/rspec/3" source_id="node0:eth1" dest_id="node1:eth1" capacity="100000000"/>
+    <property xmlns="http://www.geni.net/resources/rspec/3" source_id="node1:eth1" dest_id="node0:eth1" capacity="100000000"/>
+  </link>
+  <rspec_tour xmlns="http://www.protogeni.net/resources/rspec/ext/apt-tour/1">
+    <description type="markdown">Variable number of nodes in a lan. You have the option of picking from one
+of several standard images we provide, or just use the default (typically a recent
+version of Ubuntu). You may also optionally pick the specific hardware type for
+all the nodes in the lan. </description>
+    <instructions type="markdown">Wait for the experiment to start, and then log into one or more of the nodes
+by clicking on them in the toplogy, and choosing the `shell` menu option.
+Use `sudo` to run root commands. 
+</instructions>
+  </rspec_tour>
+  <data_set xmlns="http://www.protogeni.net/resources/rspec/ext/profile-parameters/1">
+    <data_item name="emulab.net.parameter.linkSpeed">100000000</data_item>
+    <data_item name="emulab.net.parameter.tempFileSystemSize">0</data_item>
+    <data_item name="emulab.net.parameter.useVMs">False</data_item>
+    <data_item name="emulab.net.parameter.tempFileSystemMax">False</data_item>
+    <data_item name="emulab.net.parameter.tempFileSystemMount">/mydata</data_item>
+    <data_item name="emulab.net.parameter.exclusiveVMs">True</data_item>
+    <data_item name="emulab.net.parameter.bestEffort">False</data_item>
+    <data_item name="emulab.net.parameter.phystype">c6525-100g</data_item>
+    <data_item name="emulab.net.parameter.sameSwitch">False</data_item>
+    <data_item name="emulab.net.parameter.osImage">urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD</data_item>
+    <data_item name="emulab.net.parameter.nodeCount">2</data_item>
+    <data_item name="emulab.net.parameter.startVNC">False</data_item>
+  </data_set>
+  <emulab:portal name="cloudlab" url="https://www.cloudlab.us/status.php?uuid=395dc667-3f19-11f0-af1a-e4434b2381fc" project="cs244-oncache" experiment="ingino-259075" sequence="1748803809"/>
+  <rs:site_info xmlns:rs="http://www.protogeni.net/resources/rspec/ext/site-info/1">
+    <rs:location country="US" latitude="40.750714" longitude="-111.893288"/>
+  </rs:site_info>
+</rspec>
