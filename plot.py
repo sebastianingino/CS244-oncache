@@ -27,28 +27,28 @@ DATA_CONFIG: Dict[str, DataConfig] = {
     "baremetal": {
         "filename": "{}_baremetal_output.csv",
         "label": "Bare Metal",
-        "color": "blue",
+        "color": "#1F77B4",
+    },
+    "k8s-oncache": {
+        "filename": "{}_k8s_output_oncache.csv",
+        "label": "ONCache",
+        "color": "#AEC7E8",
     },
     "k8s-antrea": {
         "filename": "{}_k8s_output_antrea.csv",
         "label": "Antrea",
-        "color": "orange",
+        "color": "#FE7F10",
     },
     "k8s-cilium": {
         "filename": "{}_k8s_output_cilium_1-16.csv",
         "label": "Cilium (1.16)",
-        "color": "green",
+        "color": "#FFBB78",
     },
     # "k8s-cilium-new": {
     #     "filename": "{}_k8s_output_cilium_1-17_tuned.csv",
     #     "label": "Cilium (1.17)",
     #     "color": "lightgreen",
     # },
-    "k8s-oncache": {
-        "filename": "{}_k8s_output_oncache.csv",
-        "label": "ONCache",
-        "color": "red",
-    },
 }
 
 GRAPHS: List[Graph] = [
@@ -179,7 +179,7 @@ def main():
         "-o",
         "--output",
         type=str,
-        default="results/{}_plot.png",
+        default=None,
         help="Output file for the plot.",
     )
     parser.add_argument(
@@ -203,6 +203,9 @@ def main():
         help="Directory to pull results from.",
     )
     args = parser.parse_args()
+
+    if args.output is None:
+        args.output = args.dir + "/{}_plot.png"
 
     bench_type = BenchType.into(args.mode)
     for b in [bench_type] if bench_type else BenchType:
