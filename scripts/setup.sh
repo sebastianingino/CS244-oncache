@@ -1,5 +1,5 @@
 sudo apt update
-sudo apt install iperf3 clang libbpf-dev llvm make linux-tools-common linux-tools-generic linux-tools-$(uname -r) -y
+sudo apt install iperf3 clang libbpf-dev llvm make linux-tools-common linux-tools-generic -y
 
 sudo ln -s /usr/include/x86_64-linux-gnu/asm /usr/include/asm
 
