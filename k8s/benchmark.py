@@ -188,7 +188,7 @@ def run_netperf_benchmark(
                 "-c",  # Report local CPU utilization
                 "--",
                 "-o",  # Output
-                "THROUGHPUT,LOCAL_CPU_UTIL",
+                "THROUGHPUT,LOCAL_CPU_UTIL",  # Output format
                 "-d",  # Test type
                 "rr|recv",  # Request/Response test, recv from server
                 "-T",  # Set the type of test

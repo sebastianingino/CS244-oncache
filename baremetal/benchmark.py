@@ -67,7 +67,8 @@ def run_client_netperf(
             str(benchmark_config["duration"]),
             "-C",  # Report remote CPU utilization
             "--",
-            "-o",  # Output all
+            "-o",  # Output
+            "THROUGHPUT,LOCAL_CPU_UTIL",  # Output format
             "-d",  # Test type
             "rr|recv",  # Request/Response test, recv from server
             "-T",  # Set the type of test
