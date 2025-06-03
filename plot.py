@@ -40,16 +40,16 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "Antrea",
         "color": "#FE7F10",
     },
-    "k8s-cilium": {
-        "filename": "{}_k8s_output_cilium.csv",
-        "label": "Cilium",
-        "color": "#FFBB78",
-    },
-    "k8s-cilium-tuned": {
-        "filename": "{}_k8s_output_cilium_tuned.csv",
-        "label": "Cilium (Tuned)",
-        "color": "#4E2705",
-    },
+    # "k8s-cilium": {
+    #     "filename": "{}_k8s_output_cilium.csv",
+    #     "label": "Cilium",
+    #     "color": "#FFBB78",
+    # },
+    # "k8s-cilium-tuned": {
+    #     "filename": "{}_k8s_output_cilium_tuned.csv",
+    #     "label": "Cilium (Tuned)",
+    #     "color": "#4E2705",
+    # },
 }
 
 GRAPHS: List[Graph] = [

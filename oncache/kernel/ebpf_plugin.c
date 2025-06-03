@@ -1,8 +1,11 @@
 // Enable debug prints
-//#define DEBUG
+// #define DEBUG
 
 // Enable flow filtering
 // #define FILTER
+
+// Enable host interface validation
+// #define HOST_IFACE
 
 #include "ebpf_plugin.h"
 
@@ -447,6 +450,7 @@ int ingress(struct __sk_buff *skb) {
     }
 
     /** BEGIN: Step 1: Destination Check */
+    #ifdef HOST_IFACE
     /** BEGIN: Interface Validation */
     // Get the interface data
     if (host_interface.ip == 0) {
@@ -465,6 +469,7 @@ int ingress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     /** END: Interface Validation */
+    #endif
     /** END: Step 1: Destination Check */
 
     /** BEGIN: Step 2: Cache Retrieving */
