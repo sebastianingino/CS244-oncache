@@ -55,6 +55,7 @@ struct {
 
 // Filter cache: (source IP, source port, dest IP, dest port, protocol) ->
 // (ingress action, egress action)
+#ifdef FILTER
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, struct flow_key);
@@ -62,6 +63,7 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } filter_cache SEC(".maps");
+#endif
 
 // Host interface: (MAC address, IP address)
 // See: https://ebpf-go.dev/concepts/global-variables/#global-variables
