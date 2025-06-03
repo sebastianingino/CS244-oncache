@@ -46,6 +46,7 @@ spec:
       labels:
         app: server-netperf
     spec:
+      terminationGracePeriodSeconds: 1
       containers:
         - name: server-netperf
           image: networkstatic/netserver
