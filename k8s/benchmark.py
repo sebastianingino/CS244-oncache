@@ -182,10 +182,16 @@ def run_netperf_benchmark(
                 "-H",
                 server["ip"],
                 "-t",  # Test type
-                f"{bench_type.value}_RR",
-                "-C",  # Report remote CPU utilization
+                "omni",  # Omni test for both TCP and UDP
                 "-l",  # Length of the test in seconds
                 str(benchmark_config["duration"]),
+                "-C",  # Report remote CPU utilization
+                "--",
+                "-o"  # Output all
+                "-d",  # Test type
+                "rr|recv",  # Request/Response test, receive only
+                "-T",  # Set the type of test
+                bench_type.value.lower(),  # TCP or UDP
             ]
 
             processes.append(

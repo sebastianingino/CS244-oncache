@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from shared.config import BenchType
 
 SCALE_KEY = "k8s-antrea"
+N_CORES = 48  # Number of cores to scale by, adjust as needed
 
 DataConfig = TypedDict(
     "DataConfig",
@@ -83,7 +84,8 @@ GRAPHS: List[Graph] = [
         "map": lambda point, name, df: point
         / df[name]["RR"]
         * df[SCALE_KEY]["RR"]
-        / 1e2,  # Percentage
+        / 1e2  # Percentage
+        * N_CORES,  # Scale by number of cores
     },
 ]
 
@@ -210,7 +212,12 @@ def main():
     bench_type = BenchType.into(args.mode)
     for b in [bench_type] if bench_type else BenchType:
         data = load_data(b, args.dir)
-        plot_data(data, b, args.output.format(b.value.lower()), args.show, )
+        plot_data(
+            data,
+            b,
+            args.output.format(b.value.lower()),
+            args.show,
+        )
 
 
 if __name__ == "__main__":

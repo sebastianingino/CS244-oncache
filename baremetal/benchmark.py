@@ -13,7 +13,7 @@ def run_client_iperf(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        time.sleep(benchmark_config["sleep"]) # Sleep before starting the test
+        time.sleep(benchmark_config["sleep"])  # Sleep before starting the test
         print(f"Running iperf3 for {n_flows} flows...")
         procs = []
         for i in range(n_flows):
@@ -24,7 +24,7 @@ def run_client_iperf(
                 "-p",  # Port number to connect to the server
                 str(benchmark_config["port_start"] + i),
                 "-t",  # Duration of the test in seconds
-                str(benchmark_config["duration"] + benchmark_config["delay"]),
+                str(benchmark_config["duration"]),
                 "-O",  # Set the number of seconds to omit at the start of the test
                 str(benchmark_config["delay"]),
                 "--logfile",
@@ -53,7 +53,7 @@ def run_client_netperf(
     for n_flows in exp_range(
         benchmark_config["min_flows"], benchmark_config["max_flows"] + 1, 2
     ):
-        time.sleep(benchmark_config["sleep"]) # Sleep before starting the test
+        time.sleep(benchmark_config["sleep"])  # Sleep before starting the test
         print(f"Running netperf for {n_flows} flows...")
         cmd = [
             "netperf",
@@ -62,10 +62,16 @@ def run_client_netperf(
             "-p",  # Port number to connect to the server
             str(benchmark_config["port_start"]),
             "-t",  # Test type
-            f"{bench_type.value}_RR",  # RR test
-            "-C",  # Report remote CPU utilization
+            "omni",  # Omni test for both TCP and UDP
             "-l",  # Length of the test in seconds
             str(benchmark_config["duration"]),
+            "-C",  # Report remote CPU utilization
+            "--",
+            "-o",  # Output all
+            "-d",  # Test type
+            "rr|recv",  # Request/Response test, receive only
+            "-T",  # Set the type of test
+            bench_type.value.lower(),  # TCP or UDP
         ]
 
         processes = []
@@ -123,7 +129,7 @@ def run_server_iperf(benchmark_config: BenchmarkConfig):
         cmd = [
             "iperf3",
             "-s",
-            "-p", # Port number to listen on
+            "-p",  # Port number to listen on
             str(benchmark_config["port_start"] + i),
             "--logfile",
             f"logs/baremetal/server_log_throughput_{i}_flows.json",
@@ -147,7 +153,7 @@ def run_server_netperf(benchmark_config: BenchmarkConfig):
     # netperf rr benchmark
     cmd = [
         "netserver",
-        "-p", # Port number to listen on
+        "-p",  # Port number to listen on
         str(benchmark_config["port_start"]),
         "-D",  # Run NOT as a daemon
     ]
@@ -174,7 +180,11 @@ def run_server(benchmark_config: BenchmarkConfig, test: Optional[str] = None):
         run_server_iperf(benchmark_config)
 
 
-def run_benchmark(bench_type: Optional[BenchType] = None, test: Optional[str] = None, role: Optional[str] = None):
+def run_benchmark(
+    bench_type: Optional[BenchType] = None,
+    test: Optional[str] = None,
+    role: Optional[str] = None,
+):
     general_config = get_benchmark_config()
     spec_config = load_config("config/baremetal.toml")
 
