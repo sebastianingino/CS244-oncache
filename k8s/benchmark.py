@@ -207,7 +207,7 @@ def run_netperf_benchmark(
             else:
                 # Export the output to a file
                 with open(
-                    f"logs/k8s/{overlay}/{bench_type.value.lower()}/client_log_netperf_{n_flows}_flows_{i}.txt",
+                    f"logs/k8s/{overlay}/{bench_type.value.lower()}/client_log_latency_{n_flows}_flows_{i}.txt",
                     "w",
                     encoding="utf-8",
                 ) as f:

@@ -14,7 +14,7 @@ CSV_FIELDS = [
     "RR CPU",
 ]
 THROUGHPUT_PATTERN = "logs/k8s/{overlay}/{bench_type}/client_log_throughput_{{n_flows}}_flows_{{flow_idx}}.json"
-RR_PATTERN = "logs/k8s/{overlay}/{bench_type}/client_log_netperf_{{n_flows}}_flows_{{flow_idx}}.txt"
+RR_PATTERN = "logs/k8s/{overlay}/{bench_type}/client_log_latency_{{n_flows}}_flows_{{flow_idx}}.txt"
 
 
 def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, float]:

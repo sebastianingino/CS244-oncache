@@ -87,7 +87,7 @@ def run_client_netperf(
         for i, p in enumerate(processes):
             # Export the output to a file
             with open(
-                f"logs/baremetal/{bench_type.value.lower()}/client_log_rr_{n_flows}_flows.txt",
+                f"logs/baremetal/{bench_type.value.lower()}/client_log_latency_{n_flows}_flows.txt",
                 "a",
             ) as f:
                 f.write(f"Output for flow {i + 1}:\n")

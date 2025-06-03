@@ -16,7 +16,7 @@ CSV_FIELDS = [
 THROUGHPUT_PATTERN = (
     "logs/baremetal/{bench_type}/client_log_throughput_{n_flows}_flows_{flow_idx}.json"
 )
-RR_PATTERN = "logs/baremetal/{bench_type}/client_log_rr_{n_flows}_flows.txt"
+RR_PATTERN = "logs/baremetal/{bench_type}/client_log_latency_{n_flows}_flows.txt"
 
 
 def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, float]:
@@ -82,7 +82,11 @@ def parse_throughput_many(
         flow_result = {}
         for flow_idx in range(n_flows):
             single_result = parse_throughput_single(
-                pattern.format(bench_type=bench_type.value.lower(), n_flows=n_flows, flow_idx=flow_idx),
+                pattern.format(
+                    bench_type=bench_type.value.lower(),
+                    n_flows=n_flows,
+                    flow_idx=flow_idx,
+                ),
                 bench_type,
             )
             for field, item in single_result.items():
