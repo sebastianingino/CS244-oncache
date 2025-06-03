@@ -1,4 +1,5 @@
 sudo apt update
+sudo apt install -f -y
 sudo apt upgrade -y
 sudo apt install iperf3 clang libbpf-dev llvm make linux-tools-common linux-tools-generic -y
 
