@@ -32,7 +32,7 @@ def parse_throughput_single(filename: str, bench_type: BenchType) -> Dict[str, f
             bits_per_second = (
                 float(data["end"]["sum"]["bits_per_second"]) * received_rate
             )
-        cpu_utilization = float(data["end"]["cpu_utilization_percent"]["remote_total"])
+        cpu_utilization = float(data["end"]["cpu_utilization_percent"]["host_total"])
         num_flows = int(data["start"]["test_start"]["num_streams"])
 
         return {
@@ -56,8 +56,8 @@ def parse_rr_single(
         for i in range(len(lines)):
             if lines[i].startswith("OMNI Send|Recv TEST"):
                 data = lines[i + 2].split(",")
-                rates.append(float(data[7]))
-                cpu_usages.append(float(data[16]))
+                rates.append(float(data[0]))
+                cpu_usages.append(float(data[1]))
         average_rate = sum(rates) / len(rates)
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {

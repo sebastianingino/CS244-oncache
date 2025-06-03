@@ -187,7 +187,8 @@ def run_netperf_benchmark(
                 str(benchmark_config["duration"]),
                 "-c",  # Report local CPU utilization
                 "--",
-                "-o",  # Output all
+                "-o",  # Output
+                "THROUGHPUT,LOCAL_CPU_UTIL",
                 "-d",  # Test type
                 "rr|recv",  # Request/Response test, recv from server
                 "-T",  # Set the type of test
