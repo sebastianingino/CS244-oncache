@@ -1,5 +1,8 @@
 // Enable debug prints
-// #define DEBUG
+//#define DEBUG
+
+// Enable flow filtering
+// #define FILTER
 
 #include "ebpf_plugin.h"
 
@@ -126,6 +129,8 @@ int egress_init(struct __sk_buff *skb) {
         .ifindex = skb->ifindex,
     };
 
+    int err;
+#ifdef FILTER
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     // Note: this must be done first since future actions can only be done once
@@ -133,7 +138,7 @@ int egress_init(struct __sk_buff *skb) {
         .ingress = 0,
         .egress = 1,
     };
-    int err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
+    err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
     if (err) {
         // If the entry already exists, update the egress action
         struct filter_action *existing_action =
@@ -148,6 +153,7 @@ int egress_init(struct __sk_buff *skb) {
     } else {
         DEBUG_PRINT("(egress_init) Updated filter_cache");
     }
+#endif
 
     // Add mapping (container destination IP -> host destination IP) to the
     // egress cache L1
@@ -228,6 +234,8 @@ int egress(struct __sk_buff *skb) {
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
+    
+#ifdef FILTER
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
@@ -241,6 +249,7 @@ int egress(struct __sk_buff *skb) {
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
+#endif
     /** END: Forward Cache Validation */
 
     /** BEGIN: Reverse Cache Validation */
@@ -371,6 +380,7 @@ int ingress_init(struct __sk_buff *skb) {
     // Note: the veth index is maintained by the daemon
     data->eth = headers->eth;
 
+#ifdef FILTER
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     struct filter_action action = {
@@ -393,6 +403,7 @@ int ingress_init(struct __sk_buff *skb) {
     } else {
         DEBUG_PRINT("(ingress_init) Updated filter_cache");
     }
+#endif
     /** END: Cache Initialization */
 
     // Clear packet marks
@@ -465,6 +476,8 @@ int ingress(struct __sk_buff *skb) {
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
     }
+
+#ifdef FILTER
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
@@ -478,6 +491,7 @@ int ingress(struct __sk_buff *skb) {
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
     }
+#endif
     /** END: Forward Cache Validation */
     /** BEGIN: Reverse Cache Validation */
     // Check if mapping in egress cache L1 exists
