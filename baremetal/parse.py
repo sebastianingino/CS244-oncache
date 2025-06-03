@@ -54,10 +54,10 @@ def parse_rr_single(
         cpu_usages = []
 
         for i in range(len(lines)):
-            if lines[i].startswith("Local /Remote"):
-                data = lines[i + 5].split()
-                rates.append(float(data[5]))
-                cpu_usages.append(float(data[7]))
+            if lines[i].startswith("OMNI Send|Recv TEST"):
+                data = lines[i + 2].split(",")
+                rates.append(float(data[7]))
+                cpu_usages.append(float(data[16]))
         average_rate = sum(rates) / len(rates)
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
         return {

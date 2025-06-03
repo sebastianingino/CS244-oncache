@@ -46,9 +46,9 @@ def parse_rr_single(
         rates = []
         cpu_usages = []
 
-        data = lines[-2].split()
-        rates.append(float(data[5]))
-        cpu_usages.append(float(data[7]))
+        data = lines[-1].split()
+        rates.append(float(data[7]))
+        cpu_usages.append(float(data[16]))
 
         average_rate = sum(rates) / len(rates)
         average_cpu_usage = sum(cpu_usages) / len(cpu_usages)
