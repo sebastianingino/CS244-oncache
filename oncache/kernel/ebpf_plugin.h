@@ -179,11 +179,13 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         return false;
     }
 
-    #ifdef FILTER
+    #ifndef FILTER
+    return true;  // No filtering, just return true
+    #endif
+
     key->src_ip = egress ? headers->ip.saddr : headers->ip.daddr;
     key->dst_ip = egress ? headers->ip.daddr : headers->ip.saddr;
     key->protocol = headers->ip.protocol;
-    #endif
     // Check if the packet is long enough
     switch (headers->ip.protocol) {
         case IPPROTO_TCP:
@@ -192,12 +194,10 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
                 DEBUG_PRINT("(to_flow_key) Too short for TCP packet");
                 return false;
             }
-            #ifdef FILTER
             struct tcphdr *tcp_hdr =
                 (struct tcphdr *)((__u8 *)headers + sizeof(inner_headers_t));
             key->src_port = egress ? tcp_hdr->source : tcp_hdr->dest;
             key->dst_port = egress ? tcp_hdr->dest : tcp_hdr->source;
-            #endif
             break;
         case IPPROTO_UDP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
@@ -205,12 +205,10 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
                 DEBUG_PRINT("(to_flow_key) Too short for UDP packet");
                 return false;
             }
-            #ifdef FILTER
             struct udphdr *udp_hdr =
                 (struct udphdr *)((__u8 *)headers + sizeof(inner_headers_t));
             key->src_port = egress ? udp_hdr->source : udp_hdr->dest;
             key->dst_port = egress ? udp_hdr->dest : udp_hdr->source;
-            #endif
             break;
         default:
             DEBUG_PRINT("(to_flow_key) Not a TCP or UDP packet {ip_proto: %d}",
