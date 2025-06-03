@@ -65,7 +65,7 @@ def run_client_netperf(
             "omni",  # Omni test for both TCP and UDP
             "-l",  # Length of the test in seconds
             str(benchmark_config["duration"]),
-            "-C",  # Report remote CPU utilization
+            "-c",  # Report local CPU utilization
             "--",
             "-o",  # Output
             "THROUGHPUT,LOCAL_CPU_UTIL",  # Output format
