@@ -69,7 +69,7 @@ def run_client_netperf(
             "--",
             "-o",  # Output all
             "-d",  # Test type
-            "rr|send",  # Request/Response test, send to server
+            "rr|recv",  # Request/Response test, recv from server
             "-T",  # Set the type of test
             bench_type.value.lower(),  # TCP or UDP
         ]
