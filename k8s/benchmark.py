@@ -189,7 +189,7 @@ def run_netperf_benchmark(
                 "--",
                 "-o"  # Output all
                 "-d",  # Test type
-                "rr|recv",  # Request/Response test, receive only
+                "rr|send",  # Request/Response test, send to server
                 "-T",  # Set the type of test
                 bench_type.value.lower(),  # TCP or UDP
             ]
