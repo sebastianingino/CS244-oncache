@@ -162,10 +162,6 @@ static void mark(struct __sk_buff *skb, __u32 inner_offset, __u8 marker,
         bpf_htons(new_tos),
         2);  // Note: 2 bytes because that's the minimum size See:
              // https://docs.ebpf.io/linux/helper-function/bpf_l3_csum_replace/
-
-    // Mark hash as invalid
-    // See: https://docs.ebpf.io/linux/helper-function/bpf_set_hash_invalid/
-    bpf_set_hash_invalid(skb);
 }
 
 // Convert inner headers to flow key

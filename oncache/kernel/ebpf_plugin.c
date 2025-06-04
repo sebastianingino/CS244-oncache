@@ -509,9 +509,6 @@ int ingress(struct __sk_buff *skb) {
     inner_headers_t *inner = (inner_headers_t *)(skb->data);
     inner->eth = data->eth;
 
-    // Mark hash as invalid
-    bpf_set_hash_invalid(skb);
-
     // Redirect to the veth interface
     return bpf_redirect_peer(data->vindex, 0);
 }
