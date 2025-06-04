@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-netperf
+  labels:
+    app: client-netperf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-netperf
+  template:
+    metadata:
+      labels:
+        app: client-netperf
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: client-netperf
+          image: networkstatic/netperf
+          imagePullPolicy: IfNotPresent
+          command: ["sleep"]
+          args: ["infinity"]
+          ports:
+            - containerPort: 12865
+              protocol: TCP
+            - containerPort: 12865
+              protocol: UDP
+      nodeSelector:
+        bench-role: client
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-netperf
+  labels:
+    app: server-netperf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server-netperf
+  template:
+    metadata:
+      labels:
+        app: server-netperf
+    spec:
+      terminationGracePeriodSeconds: 1
+      containers:
+        - name: server-netperf
+          image: networkstatic/netserver
+          imagePullPolicy: IfNotPresent
+          args: ["-D"]
+          ports:
+            - containerPort: 12865
+              protocol: TCP
+            - containerPort: 12865
+              protocol: UDP
+      nodeSelector:
+        bench-role: server

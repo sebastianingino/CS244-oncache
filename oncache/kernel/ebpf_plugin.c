@@ -1,12 +1,6 @@
 // Enable debug prints
 // #define DEBUG
 
-// Enable flow filtering
-// #define FILTER
-
-// Enable host interface validation
-// #define HOST_IFACE
-
 #include "ebpf_plugin.h"
 
 // Maximum number of entries in the caches
@@ -58,7 +52,6 @@ struct {
 
 // Filter cache: (source IP, source port, dest IP, dest port, protocol) ->
 // (ingress action, egress action)
-#ifdef FILTER
 struct {
     __uint(type, BPF_MAP_TYPE_LRU_HASH);
     __type(key, struct flow_key);
@@ -66,7 +59,6 @@ struct {
     __uint(max_entries, MAX_ENTRIES);
     __uint(pinning, LIBBPF_PIN_BY_NAME);
 } filter_cache SEC(".maps");
-#endif
 
 // Host interface: (MAC address, IP address)
 // See: https://ebpf-go.dev/concepts/global-variables/#global-variables
@@ -134,8 +126,6 @@ int egress_init(struct __sk_buff *skb) {
         .ifindex = skb->ifindex,
     };
 
-    int err;
-#ifdef FILTER
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     // Note: this must be done first since future actions can only be done once
@@ -143,7 +133,7 @@ int egress_init(struct __sk_buff *skb) {
         .ingress = 0,
         .egress = 1,
     };
-    err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
+    int err = bpf_map_update_elem(&filter_cache, &key, &action, BPF_NOEXIST);
     if (err) {
         // If the entry already exists, update the egress action
         struct filter_action *existing_action =
@@ -158,7 +148,6 @@ int egress_init(struct __sk_buff *skb) {
     } else {
         DEBUG_PRINT("(egress_init) Updated filter_cache");
     }
-#endif
 
     // Add mapping (container destination IP -> host destination IP) to the
     // egress cache L1
@@ -240,7 +229,6 @@ int egress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     
-#ifdef FILTER
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
@@ -254,7 +242,6 @@ int egress(struct __sk_buff *skb) {
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
-#endif
     /** END: Forward Cache Validation */
 
     /** BEGIN: Reverse Cache Validation */
@@ -385,7 +372,6 @@ int ingress_init(struct __sk_buff *skb) {
     // Note: the veth index is maintained by the daemon
     data->eth = headers->eth;
 
-#ifdef FILTER
     // Add mapping (source IP, source port, dest IP, dest port, protocol) ->
     // (ingress action, egress action) to the filter cache
     struct filter_action action = {
@@ -408,7 +394,6 @@ int ingress_init(struct __sk_buff *skb) {
     } else {
         DEBUG_PRINT("(ingress_init) Updated filter_cache");
     }
-#endif
     /** END: Cache Initialization */
 
     // Clear packet marks
@@ -450,7 +435,6 @@ int ingress(struct __sk_buff *skb) {
     }
 
     /** BEGIN: Step 1: Destination Check */
-    #ifdef HOST_IFACE
     /** BEGIN: Interface Validation */
     // Get the interface data
     if (host_interface.ip == 0) {
@@ -469,7 +453,6 @@ int ingress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     /** END: Interface Validation */
-    #endif
     /** END: Step 1: Destination Check */
 
     /** BEGIN: Step 2: Cache Retrieving */
@@ -484,7 +467,6 @@ int ingress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
-#ifdef FILTER
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
@@ -498,7 +480,6 @@ int ingress(struct __sk_buff *skb) {
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
     }
-#endif
     /** END: Forward Cache Validation */
     /** BEGIN: Reverse Cache Validation */
     // Check if mapping in egress cache L1 exists
