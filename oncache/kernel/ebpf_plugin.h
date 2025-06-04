@@ -179,10 +179,6 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         return false;
     }
 
-    #ifndef FILTER
-    return true;  // No filtering, just return true
-    #endif
-
     key->src_ip = egress ? headers->ip.saddr : headers->ip.daddr;
     key->dst_ip = egress ? headers->ip.daddr : headers->ip.saddr;
     key->protocol = headers->ip.protocol;
