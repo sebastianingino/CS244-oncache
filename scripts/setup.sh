@@ -26,3 +26,5 @@ mise install
 `mise which pip` install -r requirements.txt
 
 git submodule update --init --recursive
+
+sudo killall irqbalance
