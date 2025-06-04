@@ -35,11 +35,11 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "ONCache",
         "color": "#AEC7E8",
     },
-    "k8s-oncache-orig": {
-        "filename": "{}_k8s_output_oncache_orig.csv",
-        "label": "ONCache (Theirs)",
-        "color": "#BEF49F",
-    },
+    # "k8s-oncache-orig": {
+    #     "filename": "{}_k8s_output_oncache_orig.csv",
+    #     "label": "ONCache (Theirs)",
+    #     "color": "#BEF49F",
+    # },
     "k8s-antrea": {
         "filename": "{}_k8s_output_antrea.csv",
         "label": "Antrea",
@@ -50,11 +50,11 @@ DATA_CONFIG: Dict[str, DataConfig] = {
         "label": "Cilium (Untuned)",
         "color": "#FFBB78",
     },
-    "k8s-cilium-tuned": {
-        "filename": "{}_k8s_output_cilium_tuned.csv",
-        "label": "Cilium (Tuned)",
-        "color": "#4E2705",
-    },
+    # "k8s-cilium-tuned": {
+    #     "filename": "{}_k8s_output_cilium_tuned.csv",
+    #     "label": "Cilium (Tuned)",
+    #     "color": "#4E2705",
+    # },
 }
 
 GRAPHS: List[Graph] = [
