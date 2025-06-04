@@ -11,7 +11,7 @@ sudo apt-get install helm
 helm repo add cilium https://helm.cilium.io/
 helm install cilium cilium/cilium --version 1.12.4 \
 --namespace kube-system \
---set kubeProxyReplacement=enabled \
+--set kubeProxyReplacement=strict \
 --set k8sServiceHost="10.10.1.1" \
 --set k8sServicePort=6443 \
 --set routingMode=native \
