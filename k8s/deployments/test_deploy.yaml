@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: client-netperf
+  name: client
   labels:
-    app: client-netperf
+    app: client
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: client-netperf
+      app: client
   template:
     metadata:
       labels:
-        app: client-netperf
+        app: client
     spec:
       terminationGracePeriodSeconds: 1
       containers:
-        - name: client-netperf
-          image: networkstatic/netperf
+        - name: client
+          image: ncilium/netperf
           imagePullPolicy: IfNotPresent
           command: ["sleep"]
           args: ["infinity"]
@@ -33,24 +33,25 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: server-netperf
+  name: server
   labels:
-    app: server-netperf
+    app: server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: server-netperf
+      app: server
   template:
     metadata:
       labels:
-        app: server-netperf
+        app: server
     spec:
       terminationGracePeriodSeconds: 1
       containers:
-        - name: server-netperf
-          image: networkstatic/netserver
+        - name: server
+          image: cilium/netperf
           imagePullPolicy: IfNotPresent
+          command: ["netserver"]
           args: ["-D"]
           ports:
             - containerPort: 12865
