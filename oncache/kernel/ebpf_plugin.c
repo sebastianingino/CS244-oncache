@@ -407,7 +407,7 @@ int ingress_init(struct __sk_buff *skb) {
 // Attached to incoming packets, host interface
 SEC("tc/ingress")
 int ingress(struct __sk_buff *skb) {
-    DEBUG_PRINT("(ingress_init) ingress called");
+    DEBUG_PRINT("(ingress) ingress called");
 
     /** BEGIN: Packet Validation */
     // Check if the skb is valid and is long enough
@@ -507,8 +507,7 @@ int ingress(struct __sk_buff *skb) {
 
     // Set the inner headers
     inner_headers_t *inner = (inner_headers_t *)(skb->data);
-    __builtin_memcpy(inner->eth.h_dest, data->eth.h_dest, ETH_ALEN);
-    __builtin_memcpy(inner->eth.h_source, data->eth.h_source, ETH_ALEN);
+    inner->eth = data->eth;
 
     // Mark hash as invalid
     bpf_set_hash_invalid(skb);
