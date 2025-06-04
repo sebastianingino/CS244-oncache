@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 1
       containers:
         - name: client
-          image: ncilium/netperf
+          image: cilium/netperf
           imagePullPolicy: IfNotPresent
           command: ["sleep"]
           args: ["infinity"]
