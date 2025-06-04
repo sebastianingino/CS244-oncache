@@ -183,7 +183,7 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         case IPPROTO_TCP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
                                     sizeof(struct tcphdr)) {
-                DEBUG_PRINT("(to_flow_key) Too short for TCP packet");
+                ERROR_PRINT("(to_flow_key) Too short for TCP packet");
                 return false;
             }
             struct tcphdr *tcp_hdr =
@@ -194,7 +194,7 @@ static bool_t to_flow_key(inner_headers_t *headers, struct __sk_buff *skb,
         case IPPROTO_UDP:
             if (skb->data_end < (__u64)headers + sizeof(inner_headers_t) +
                                     sizeof(struct udphdr)) {
-                DEBUG_PRINT("(to_flow_key) Too short for UDP packet");
+                ERROR_PRINT("(to_flow_key) Too short for UDP packet");
                 return false;
             }
             struct udphdr *udp_hdr =
