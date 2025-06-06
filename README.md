@@ -16,7 +16,7 @@ As specified in the original paper, this code (and associated scripts) is design
    Note: Ubuntu 20.04 LTS comes with Linux kernel 5.4 by default. You will need to update it to version 5.14.
 
    ```bash
-   scripts/kernel_update.sh
+   scripts/kernel_upgrade.sh
    ```
 
    After updating the kernel, some packages may be installed with broken dependencies. If you encounter issues, you can try to fix them by running:
