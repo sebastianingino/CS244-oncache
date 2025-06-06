@@ -14,13 +14,8 @@ helm install cilium cilium/cilium --version 1.12.4 \
 --set kubeProxyReplacement=strict \
 --set k8sServiceHost="10.10.1.1" \
 --set k8sServicePort=6443 \
---set routingMode=native \
 --set bpf.masquerade=true \
 --set ipv4.enabled=true \
---set enableIPv4BIGTCP=true \
 --set ipv4NativeRoutingCIDR="10.244.0.0/16" \
 --set autoDirectNodeRoutes=true \
---set installNoConntrackIptablesRules=true \
---set hubble.enabled=false \
---set bpfClockProbe=true \
---set tunnel=disabled
+--set hubble.enabled=false
