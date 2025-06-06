@@ -1,5 +1,5 @@
 # Remove taint
-kubectl taint nodes node0 node-role.kubernetes.io/master:NoSchedule-
+kubectl taint nodes node0 node-role.kubernetes.io/control-plane:NoSchedule- | true
 
 # Add roles
 kubectl label nodes node0 bench-role=client
