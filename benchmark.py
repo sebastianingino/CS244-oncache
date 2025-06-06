@@ -22,8 +22,7 @@ def main():
         "-o",
         "--overlay",
         type=str,
-        help="The overlay network to use for the benchmark (k8s only)",
-        choices=["antrea", "cilium", "cilium_tuned", "oncache"],
+        help="The overlay network name for the benchmark (k8s only)",
         default=None,
     )
     parser.add_argument(
