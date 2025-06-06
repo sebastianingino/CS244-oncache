@@ -47,7 +47,7 @@ DATA_CONFIG: Dict[str, DataConfig] = {
     },
     "k8s-cilium": {
         "filename": "{}_k8s_output_cilium.csv",
-        "label": "Cilium (Untuned)",
+        "label": "Cilium",
         "color": "#FFBB78",
     },
     # "k8s-cilium-tuned": {
