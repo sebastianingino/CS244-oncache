@@ -205,6 +205,10 @@ int egress(struct __sk_buff *skb) {
                     headers->ip.protocol);
         return TC_ACT_OK;
     }
+
+    // Get the packet hash for later
+    __u32 hash = bpf_get_hash_recalc(skb);
+
     /** END: Packet Validation */
 
     /** BEGIN: Step 1: Cache Retrieving */
@@ -282,7 +286,6 @@ int egress(struct __sk_buff *skb) {
     encap_headers->outer.udp.len =
         bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
     // Update the UDP source port
-    __u32 hash = bpf_get_hash_recalc(skb);
     __be16 src_port = bpf_htons(VXLAN_UDP_PORT +
                                 (hash % (VXLAN_UDP_PORT_MAX - VXLAN_UDP_PORT)));
     encap_headers->outer.udp.source = src_port;
