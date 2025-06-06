@@ -5,6 +5,9 @@ sudo ipvsadm --clear
 sudo rm -rf /var/lib/etcd
 sudo rm -rf /var/lib/cni
 sudo rm -rf /var/lib/kubelet
+sudo rm -rf /var/lib/containerd
+sudo rm -rf /var/run/kubernetes
+sudo rm -rf /var/run/cni
 
 sudo systemctl restart containerd.service
 sudo systemctl restart kubelet.service
