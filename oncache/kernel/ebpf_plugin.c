@@ -269,48 +269,32 @@ int egress(struct __sk_buff *skb) {
             BPF_F_ADJ_ROOM_ENCAP_L2(
                 sizeof(struct ethhdr)) |   // Reserve space for outer MAC header
             BPF_F_ADJ_ROOM_ENCAP_L2_ETH);  // L2 tunnel type: Ethernet
-    if (err || skb->data_end < skb->data + sizeof(outer_headers_t)) {
+    if (err || skb->data_end < skb->data + sizeof(encap_headers_t)) {
         ERROR_PRINT("(egress) Failed to adjust skb room: %d", err);
         return TC_ACT_OK;
     }
 
     // Set the outer headers
-    outer_headers_t *outer = (outer_headers_t *)(skb->data);
-    *outer = data->outer;
+    encap_headers_t *encap_headers = (encap_headers_t *)(skb->data);
+    *encap_headers = data;
     // Update the UDP length
-    outer->udp.len =
+    encap_headers->outer.udp.len =
         bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
+    // Update the UDP source port
+    __u32 hash = bpf_get_hash_recalc(skb);
+    __be16 src_port = bpf_htons(VXLAN_UDP_PORT +
+                                (hash % (VXLAN_UDP_PORT_MAX - VXLAN_UDP_PORT)));
+    encap_headers->outer.udp.source = src_port;
     // Update the IP length and checksum
-    __u16 old_len = outer->ip.tot_len;
+    __u16 old_len = encap_headers->outer.ip.tot_len;
     __u16 new_len = bpf_htons(skb->len - sizeof(struct ethhdr));
-    outer->ip.tot_len = new_len;
+    encap_headers->outer.ip.tot_len = new_len;
     // L3 checksum replacement is incremental
     // See: https://docs.ebpf.io/linux/helper-function/bpf_l3_csum_replace/
     // Note: this makes me sad
     bpf_l3_csum_replace(skb,
                         sizeof(struct ethhdr) + offsetof(struct iphdr, check),
                         old_len, new_len, sizeof(__u16));
-
-    // Re-check length due to L3 checksum replacement invalidating pointers
-    if (skb->data_end <
-        skb->data + sizeof(outer_headers_t) + sizeof(inner_headers_t)) {
-        ERROR_PRINT("(egress) Failed to re-check skb length");
-        return TC_ACT_OK;
-    }
-
-    // Get headers
-    outer = (outer_headers_t *)(skb->data);
-    inner_headers_t *inner =
-        (inner_headers_t *)(skb->data + sizeof(outer_headers_t));
-
-    // Set inner MAC header
-    inner->eth = data->inner;
-
-    // Update the UDP source port
-    __u32 hash = bpf_get_hash_recalc(skb);
-    __be16 src_port = bpf_htons(VXLAN_UDP_PORT +
-                                (hash % (VXLAN_UDP_PORT_MAX - VXLAN_UDP_PORT)));
-    outer->udp.source = src_port;
 
     return bpf_redirect(data->ifindex, 0);
 }
