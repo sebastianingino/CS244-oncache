@@ -276,7 +276,8 @@ int egress(struct __sk_buff *skb) {
 
     // Set the outer headers
     encap_headers_t *encap_headers = (encap_headers_t *)(skb->data);
-    *encap_headers = data;
+    encap_headers->outer = data->outer;
+    encap_headers->inner.eth = data->inner;
     // Update the UDP length
     encap_headers->outer.udp.len =
         bpf_htons(skb->len - sizeof(struct ethhdr) - sizeof(struct iphdr));
