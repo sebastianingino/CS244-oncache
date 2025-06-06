@@ -10,5 +10,8 @@ sudo rm -rf /var/lib/containerd
 sudo rm -rf /var/run/kubernetes
 sudo rm -rf /var/run/cni
 
-sudo systemctl restart containerd.service
+sudo containerd config default | sudo tee /etc/containerd/config.toml
+sudo sed -i -e 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl restart containerd
+
 sudo systemctl restart kubelet.service
