@@ -146,7 +146,7 @@ def plot_data(
     Args:
         data (Dict[str, pd.DataFrame]): A dictionary containing DataFrames for each data source .
     """
-    fig, plts = plt.subplots(1, len(GRAPHS), figsize=(16, 4))
+    fig, plts = plt.subplots(1, len(GRAPHS), figsize=(14, 3))
     fig.subplots_adjust(hspace=0.4)
     for i, graph in enumerate(GRAPHS):
         ax = plts[i]
@@ -167,10 +167,15 @@ def plot_data(
         ax.set_ylabel(graph["ylabel"])
 
     handles, labels = plts[-1].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=len(DATA_CONFIG))
+    fig.legend(
+        handles,
+        labels,
+        loc="upper center",
+        ncol=len(DATA_CONFIG),
+        bbox_to_anchor=(0.5, 1.1),
+    )
 
     plt.tight_layout()
-    plt.subplots_adjust(top=0.85)
     if not os.path.exists(os.path.dirname(output)):
         os.makedirs(os.path.dirname(output))
     plt.savefig(output, dpi=300, bbox_inches="tight")
