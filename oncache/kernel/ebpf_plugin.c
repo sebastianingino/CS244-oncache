@@ -159,7 +159,7 @@ int egress_init(struct __sk_buff *skb) {
         return TC_ACT_OK;
     } else {
         DEBUG_PRINT("(egress_init) Updated egress_host_cache: %u -> %u",
-                   container_dst_ip, host_dst_ip);
+                    container_dst_ip, host_dst_ip);
     }
 
     // Add mapping (host destination IP -> (outer headers, inner MAC header,
@@ -170,8 +170,9 @@ int egress_init(struct __sk_buff *skb) {
                     err);
         return TC_ACT_OK;
     } else {
-        DEBUG_PRINT("(egress_init) Updated egress_data_cache: %u -> egress_data",
-                   host_dst_ip);
+        DEBUG_PRINT(
+            "(egress_init) Updated egress_data_cache: %u -> egress_data",
+            host_dst_ip);
     }
     /** END: Cache Initialization */
 
@@ -207,6 +208,14 @@ int egress(struct __sk_buff *skb) {
     }
 
     // Get the packet hash for later
+    // Note: we want to get the hash now before modifying the skb. The hash is
+    // based on the flow information of the packet and is later used to
+    // determine the UDP source port such that the destination host can properly
+    // load balance by flow.
+    // See:
+    // https://docs.ebpf.io/linux/program-context/__sk_buff/#hash
+    // https://www.kernel.org/doc/Documentation/networking/scaling.txt
+
     __u32 hash = bpf_get_hash_recalc(skb);
 
     /** END: Packet Validation */
@@ -227,12 +236,13 @@ int egress(struct __sk_buff *skb) {
     struct egress_data *data =
         bpf_map_lookup_elem(&egress_data_cache, host_dst_ip);
     if (!data) {
-        DEBUG_PRINT("(egress) Egress data not found for host destination IP: %u",
-                   *host_dst_ip);
+        DEBUG_PRINT(
+            "(egress) Egress data not found for host destination IP: %u",
+            *host_dst_ip);
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
-    
+
     // Check if the packet is allowed in the filter cache
     struct filter_action *action = bpf_map_lookup_elem(&filter_cache, &key);
     if (!action) {
@@ -242,7 +252,7 @@ int egress(struct __sk_buff *skb) {
     }
     if (!action->egress || !action->ingress) {
         DEBUG_PRINT("(egress) Filter action not allowed: ingress=%u, egress=%u",
-                   action->ingress, action->egress);
+                    action->ingress, action->egress);
         mark(skb, 0, MISSED_MARK, 1);
         return TC_ACT_OK;
     }
@@ -463,8 +473,9 @@ int ingress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
     if (!action->ingress || !action->egress) {
-        DEBUG_PRINT("(ingress) Filter action not allowed: ingress=%u, egress=%u",
-                   action->ingress, action->egress);
+        DEBUG_PRINT(
+            "(ingress) Filter action not allowed: ingress=%u, egress=%u",
+            action->ingress, action->egress);
         mark(skb, sizeof(outer_headers_t), MISSED_MARK, 1);
         return TC_ACT_OK;
     }
