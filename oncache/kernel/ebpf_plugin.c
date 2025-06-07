@@ -207,17 +207,6 @@ int egress(struct __sk_buff *skb) {
         return TC_ACT_OK;
     }
 
-    // Get the packet hash for later
-    // Note: we want to get the hash now before modifying the skb. The hash is
-    // based on the flow information of the packet and is later used to
-    // determine the UDP source port such that the destination host can properly
-    // load balance by flow.
-    // See:
-    // https://docs.ebpf.io/linux/program-context/__sk_buff/#hash
-    // https://www.kernel.org/doc/Documentation/networking/scaling.txt
-
-    __u32 hash = bpf_get_hash_recalc(skb);
-
     /** END: Packet Validation */
 
     /** BEGIN: Step 1: Cache Retrieving */
@@ -271,6 +260,18 @@ int egress(struct __sk_buff *skb) {
     /** END: Step 1: Cache Retrieving */
 
     /** BEGIN: Step 2: Encapsulation and Intra-host Routing */
+
+    // Get the packet hash for later
+    // Note: we want to get the hash now before modifying the skb. The hash is
+    // based on the flow information of the packet and is later used to
+    // determine the UDP source port such that the destination host can properly
+    // load balance by flow.
+    // See:
+    // https://docs.ebpf.io/linux/program-context/__sk_buff/#hash
+    // https://www.kernel.org/doc/Documentation/networking/scaling.txt
+
+    __u32 hash = bpf_get_hash_recalc(skb);
+
     // Expand the socket buffer to the size of the outer headers
     // See: https://docs.ebpf.io/linux/helper-function/bpf_skb_adjust_room/
     int err = bpf_skb_adjust_room(
