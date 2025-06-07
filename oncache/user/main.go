@@ -255,7 +255,7 @@ func setEgressRules(clientset *kubernetes.Clientset, config *rest.Config, rules 
 }
 
 func loadContainerPlugin(containerPid int, containerNetdev *string, coll *ebpf.Collection) (int, error) {
-	// Lock the OS thread so we don't accidentally switch namespaces
+	// Lock the OS thread so we don't accidentally switch threads while in the container namespace
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
