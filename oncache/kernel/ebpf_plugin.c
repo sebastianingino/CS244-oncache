@@ -282,7 +282,7 @@ int egress(struct __sk_buff *skb) {
             BPF_F_ADJ_ROOM_ENCAP_L3_IPV4 |  // Reserve space for tunnel header
             BPF_F_ADJ_ROOM_ENCAP_L4_UDP |   // L3 tunnel type: UDP
             BPF_F_ADJ_ROOM_ENCAP_L2(
-                sizeof(struct ethhdr)) |   // Reserve space for outer MAC header
+                sizeof(struct ethhdr)) |   // Reserve space for inner MAC header
             BPF_F_ADJ_ROOM_ENCAP_L2_ETH);  // L2 tunnel type: Ethernet
     if (err || skb->data_end < skb->data + sizeof(encap_headers_t)) {
         ERROR_PRINT("(egress) Failed to adjust skb room: %d", err);
